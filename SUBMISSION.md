@@ -4,6 +4,18 @@
 
 AgentPay Firewall is a policy wallet for AI agents that enforces budgets, allowlists, risk checks, and human-approval thresholds before signing x402 payments.
 
+## What Is Live
+
+The primary public demo is deployed on Vercel and uses serverless `/api/paid/*` resource routes, not a static mock. Judges can open the app and run the full browser-visible flow:
+
+1. The paid resource returns HTTP `402` with `PAYMENT-REQUIRED`.
+2. The policy wallet evaluates amount, daily budget, service allowlist, asset, network, and risk score.
+3. The wallet creates `PAYMENT-SIGNATURE` only for approved requests.
+4. The client retries the same paid resource.
+5. The server verifies the request-bound payment payload and returns `PAYMENT-RESPONSE` plus a settlement receipt.
+
+The GitHub Pages mirror is a static fallback only. The Vercel deployment is the judge-facing path for the real HTTP transport demo.
+
 ## About the Project
 
 ### Inspiration
@@ -67,7 +79,16 @@ Agentic payments need a wallet, but the wallet is not the product moat. The moat
 
 ## Notes for Judges
 
-The public GitHub Pages demo is optimized for one-click judging and uses a static fallback for the transport layer. To verify the real API flow locally:
+The public Vercel demo is the primary judge-facing build and runs the serverless paid resource API. To verify the complete hosted flow from the command line:
+
+```bash
+npm install
+npm run smoke
+```
+
+`npm run smoke` defaults to `https://agentpay-firewall.vercel.app` and verifies `402 -> PAYMENT-REQUIRED -> PAYMENT-SIGNATURE -> paid retry -> PAYMENT-RESPONSE`.
+
+To verify the same flow locally:
 
 ```bash
 npm install
@@ -86,10 +107,12 @@ The local API returns real `402` responses with `PAYMENT-REQUIRED` headers at:
 http://127.0.0.1:8787/api/paid/allowed-risk-scan
 ```
 
-Validation:
+Local validation:
 
 ```bash
 npm test
 npm run build
-npm run smoke
+BASE_URL=http://127.0.0.1:8787 npm run smoke
 ```
+
+Production architecture notes are in [ARCHITECTURE.md](ARCHITECTURE.md), including the official x402 SDK/facilitator replacement path for real signatures, verification, settlement, and explorer-linked receipts.

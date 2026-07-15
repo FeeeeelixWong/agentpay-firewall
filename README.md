@@ -11,7 +11,7 @@ It demonstrates a policy wallet for AI agents:
 - the resource server verifies the payload and returns `PAYMENT-RESPONSE`
 - every approval, block, review, and settlement is shown in the audit log
 
-The demo uses an x402-shaped local simulator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The production path is to replace the demo signer/facilitator with the official `@x402/fetch`, `@x402/express`, and chain-specific signing packages.
+The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe demo signer/facilitator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The production path is to replace the demo signer/facilitator with official x402 client, server, and chain-specific packages.
 
 ## Live Links
 
@@ -19,6 +19,7 @@ The demo uses an x402-shaped local simulator so judges can run the full Challeng
 - Demo video with English voiceover: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
 - Static fallback demo: https://feeeeelixwong.github.io/agentpay-firewall/
 - Submission notes: [SUBMISSION.md](SUBMISSION.md)
+- Production architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Demo script: [docs/demo-script.md](docs/demo-script.md)
 - Voiceover transcript: [docs/demo-voiceover.txt](docs/demo-voiceover.txt)
 
@@ -79,4 +80,7 @@ AgentPay Firewall inserts a policy layer between the agent and the x402 signer. 
 ```bash
 npm test
 npm run build
+npm run smoke
 ```
+
+`npm run smoke` defaults to the public Vercel deployment and validates the complete hosted flow: `402 -> PAYMENT-REQUIRED -> PAYMENT-SIGNATURE -> paid retry -> PAYMENT-RESPONSE`. Use `BASE_URL=http://127.0.0.1:8787 npm run smoke` while the local API is running.
