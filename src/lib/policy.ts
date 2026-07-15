@@ -29,9 +29,14 @@ export const defaultPolicy: AgentPolicy = {
   maxPerRequestUsd: 0.5,
   dailyBudgetUsd: 5,
   spentTodayUsd: 1.25,
-  allowedServices: ["risklabel.ai", "chainwatch.dev", "oracle-kit.io"],
+  allowedServices: [
+    "risklabel.ai",
+    "chainwatch.dev",
+    "oracle-kit.io",
+    "AgentPay Firewall official x402 resource",
+  ],
   allowedAssets: ["USDC"],
-  allowedNetworks: ["eip155:8453"],
+  allowedNetworks: ["eip155:8453", "eip155:84532"],
   manualApprovalAboveUsd: 0.35,
   maxRiskScore: 55,
 };

@@ -311,7 +311,8 @@ h2 {
 
 .scenario-button:disabled,
 .primary-action:disabled,
-.secondary-action:disabled {
+.secondary-action:disabled,
+.wallet-action:disabled {
   cursor: not-allowed;
   opacity: 0.62;
 }
@@ -366,9 +367,87 @@ h2 {
 }
 
 .primary-action svg,
-.secondary-action svg {
+.secondary-action svg,
+.wallet-action svg {
   width: 16px;
   height: 16px;
+}
+
+.wallet-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  background: #f9fbff;
+}
+
+.wallet-box-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.wallet-box-heading svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.wallet-box-heading strong,
+.wallet-box-heading span,
+.wallet-box label span {
+  display: block;
+}
+
+.wallet-box-heading strong {
+  font-size: 13px;
+}
+
+.wallet-box-heading span,
+.wallet-box label span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wallet-box label {
+  display: grid;
+  gap: 6px;
+}
+
+.wallet-box input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.wallet-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.wallet-action:hover:not(:disabled) {
+  filter: brightness(0.94);
 }
 
 .error-banner {
@@ -672,7 +751,8 @@ dd {
   .stage-item,
   .scenario-button,
   .primary-action,
-  .secondary-action {
+  .secondary-action,
+  .wallet-action {
     transition:
       background-color 160ms ease,
       border-color 160ms ease,
@@ -681,6 +761,7 @@ dd {
 
   .primary-action:hover:not(:disabled),
   .secondary-action:hover:not(:disabled),
+  .wallet-action:hover:not(:disabled),
   .scenario-button:hover:not(:disabled) {
     transform: translateY(-1px);
   }

@@ -11,7 +11,7 @@ It demonstrates a policy wallet for AI agents:
 - the resource server verifies the payload and returns `PAYMENT-RESPONSE`
 - every approval, block, review, and settlement is shown in the audit log
 
-The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe demo signer/facilitator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The repo also includes an official x402 SDK/facilitator harness for funded testnet verification.
+The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe demo signer/facilitator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The repo also includes an official x402 SDK/facilitator harness and an OKX Wallet browser signer path.
 
 ## Live Links
 
@@ -96,9 +96,25 @@ The default demo receipt is marked `demo-facilitator` and `onchain: false` so it
 npm run x402:ready
 X402_PAY_TO=0xYourReceivingWallet npm run dev:x402
 npm run x402:challenge
-X402_EVM_PRIVATE_KEY=0xYourFundedBuyerKey npm run x402:pay
 ```
 
 The official harness uses `@x402/express`, `@x402/fetch`, `@x402/evm`, and `@x402/core`. Defaults are Base Sepolia (`eip155:84532`) and `https://x402.org/facilitator`; set `X402_MODE=mainnet`, `X402_NETWORK=eip155:8453`, `X402_FACILITATOR_URL`, and CDP credentials for mainnet/CDP facilitator testing.
 
+For automated CLI regression testing with Base Sepolia, use:
+
+```bash
+X402_EVM_PRIVATE_KEY=0xYourFundedBuyerKey npm run x402:pay
+```
+
 The package file pins `viem` with an npm `overrides` entry because the current `@x402/evm@2.18.0` peer dependency range points beyond the latest `viem` version available from the registry in this environment.
+
+## OKX Wallet Browser Payment
+
+You can run the official buyer path without exporting a private key:
+
+```bash
+X402_PAY_TO=0xYourReceivingWallet npm run dev:x402
+npm run dev:web
+```
+
+Open `http://127.0.0.1:5176`, use the **Sign x402 with OKX** button, and confirm the typed-data signature in the OKX browser extension. OKX Wallet's documented network list includes Base mainnet (`eip155:8453`) but not Base Sepolia (`eip155:84532`), so the browser path does not force a Base Sepolia chain switch. For the default Base Sepolia testnet challenge, it asks OKX to sign the EIP-712 x402 authorization directly; if your OKX build refuses unknown-chain typed data, verify Base Sepolia with the CLI harness or point `VITE_X402_TARGET_URL` at an OKX-supported mainnet x402 resource.

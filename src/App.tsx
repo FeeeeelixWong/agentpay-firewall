@@ -58,7 +58,7 @@ type RunResult = {
   paymentRequiredHeader?: string;
   paymentSignatureHeader?: string;
   paymentResponseHeader?: string;
-  transport?: "server" | "browser-sim";
+  transport?: "server" | "browser-sim" | "okx-wallet";
 };
 
 const initialStages: FlowStage[] = [
@@ -116,7 +116,8 @@ const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: amount > 0 && amount < 0.01 ? 3 : 2,
+    maximumFractionDigits: amount > 0 && amount < 0.01 ? 6 : 2,
   }).format(amount);
 
 const now = () =>
@@ -137,6 +138,10 @@ const resetFrom = (stages: FlowStage[], activeId: string) => {
   );
 };
 
+const defaultOfficialX402TargetUrl =
+  (import.meta as ImportMeta & { env?: { VITE_X402_TARGET_URL?: string } }).env
+    ?.VITE_X402_TARGET_URL ?? "http://127.0.0.1:8790/api/paid/allowed-risk-scan";
+
 function App() {
   const [policy, setPolicy] = useState<AgentPolicy>(defaultPolicy);
   const [stages, setStages] = useState<FlowStage[]>(initialStages);
@@ -145,6 +150,8 @@ function App() {
   const [auditLog, setAuditLog] = useState<AuditEvent[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [okxAddress, setOkxAddress] = useState<string | null>(null);
+  const [officialTargetUrl, setOfficialTargetUrl] = useState(defaultOfficialX402TargetUrl);
 
   const selectedScenario = scenarios[activeScenario];
   const remainingBudget = Math.max(policy.dailyBudgetUsd - policy.spentTodayUsd, 0);
@@ -329,6 +336,96 @@ function App() {
     }
   };
 
+  const runOkxWalletPayment = async () => {
+    setActiveScenario("allowed-risk-scan");
+    setError(null);
+    setResult({});
+    setStages(initialStages.map((stage) => ({ ...stage, state: "pending" })));
+    setIsRunning(true);
+
+    try {
+      const targetUrl = officialTargetUrl.trim();
+      const { fetchOfficialX402Challenge, payOfficialX402WithOkx } = await import(
+        "./lib/okx-wallet"
+      );
+
+      setStages((current) => updateStage(current, "challenge", "active"));
+      const challenge = await fetchOfficialX402Challenge(targetUrl);
+      setResult({
+        requirement: challenge.requirement,
+        paymentRequiredHeader: challenge.header,
+        transport: "okx-wallet",
+      });
+      setStages((current) => updateStage(current, "challenge", "done"));
+
+      setStages((current) => updateStage(current, "policy", "active"));
+      const decision = evaluatePayment(challenge.requirement, policy);
+      setResult((current) => ({ ...current, decision }));
+
+      if (decision.status === "blocked") {
+        setStages((current) =>
+          resetFrom(updateStage(updateStage(current, "policy", "blocked"), "sign", "blocked"), "sign"),
+        );
+        addAuditEvent({
+          title: "OKX payment blocked",
+          detail: `${challenge.requirement.serviceName} requested ${formatCurrency(challenge.requirement.amountUsd)}. ${decision.reason}`,
+          status: "blocked",
+        });
+        return;
+      }
+
+      if (decision.status === "manual_review") {
+        setStages((current) =>
+          resetFrom(updateStage(updateStage(current, "policy", "review"), "sign", "review"), "sign"),
+        );
+        addAuditEvent({
+          title: "OKX payment needs review",
+          detail: `${challenge.requirement.serviceName} requested ${formatCurrency(challenge.requirement.amountUsd)}. ${decision.reason}`,
+          status: "review",
+        });
+        return;
+      }
+
+      setStages((current) => updateStage(current, "policy", "done"));
+      setStages((current) => updateStage(current, "sign", "active"));
+      const paid = await payOfficialX402WithOkx({ targetUrl, challenge });
+      setOkxAddress(paid.address);
+      setStages((current) => updateStage(current, "sign", "done"));
+      setStages((current) => updateStage(current, "retry", "done"));
+      setStages((current) => updateStage(current, "settle", "done"));
+      setResult((current) => ({
+        ...current,
+        paymentSignatureHeader: paid.paymentSignatureHeader,
+        paymentResponseHeader: paid.paymentResponseHeader,
+        settlement: paid.settlement,
+        apiResult: paid.apiResult,
+      }));
+      setPolicy((current) => ({
+        ...current,
+        spentTodayUsd: Number((current.spentTodayUsd + challenge.requirement.amountUsd).toFixed(3)),
+      }));
+      addAuditEvent({
+        title: "OKX Wallet payment settled",
+        detail: `${paid.address} settled ${formatCurrency(challenge.requirement.amountUsd)} with official x402 receipt ${shortHash(paid.settlement.txHash)}.${paid.networkNotice ? ` ${paid.networkNotice}` : ""}`,
+        status: "settled",
+      });
+    } catch (runError) {
+      const message = runError instanceof Error ? runError.message : "Unknown OKX wallet flow error";
+      setError(message);
+      setStages((current) => {
+        const active = current.find((stage) => stage.state === "active");
+        return active ? updateStage(current, active.id, "error") : current;
+      });
+      addAuditEvent({
+        title: "OKX payment failed",
+        detail: message,
+        status: "blocked",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const resetDemo = () => {
     setPolicy(defaultPolicy);
     setStages(initialStages.map((stage) => ({ ...stage, state: "pending" })));
@@ -336,6 +433,7 @@ function App() {
     setAuditLog([]);
     setError(null);
     setActiveScenario("allowed-risk-scan");
+    setOkxAddress(null);
   };
 
   return (
@@ -481,6 +579,34 @@ function App() {
             <button type="button" className="secondary-action" onClick={resetDemo} disabled={isRunning}>
               <RefreshCcw aria-hidden="true" />
               Reset
+            </button>
+          </div>
+
+          <div className="wallet-box">
+            <div className="wallet-box-heading">
+              <WalletCards aria-hidden="true" />
+              <div>
+                <strong>Official x402 with OKX</strong>
+                <span>{okxAddress ? shortHash(okxAddress, 10, 6) : "Wallet not connected"}</span>
+              </div>
+            </div>
+            <label>
+              <span>Official resource URL</span>
+              <input
+                value={officialTargetUrl}
+                onChange={(event) => setOfficialTargetUrl(event.currentTarget.value)}
+                disabled={isRunning}
+              />
+            </label>
+            <button
+              type="button"
+              className="wallet-action"
+              onClick={runOkxWalletPayment}
+              disabled={isRunning}
+              aria-busy={isRunning}
+            >
+              <WalletCards aria-hidden="true" />
+              {isRunning ? "Waiting for wallet" : "Sign x402 with OKX"}
             </button>
           </div>
 
