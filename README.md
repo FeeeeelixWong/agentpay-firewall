@@ -32,6 +32,8 @@ The local API runs on:
 http://127.0.0.1:8787
 ```
 
+The repo also includes Vercel serverless API routes under `api/` so the same UI can run as a deployed public demo.
+
 ## Demo Flow
 
 1. Run **Allowed paid API**.
