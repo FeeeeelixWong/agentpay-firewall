@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
+  createSettlementResponse,
   createPaymentPayload,
   decodeBase64Json,
   encodeBase64Json,
@@ -57,6 +58,7 @@ type RunResult = {
   paymentRequiredHeader?: string;
   paymentSignatureHeader?: string;
   paymentResponseHeader?: string;
+  transport?: "server" | "browser-sim";
 };
 
 const initialStages: FlowStage[] = [
@@ -184,20 +186,31 @@ function App() {
 
     try {
       setStages((current) => updateStage(current, "challenge", "active"));
-      const challengeResponse = await fetch(scenario.resourcePath);
+      let transport: RunResult["transport"] = "server";
+      let paymentRequiredHeader: string | undefined;
+      let requirement: PaymentRequirement;
 
-      if (challengeResponse.status !== 402) {
-        throw new Error(`Expected a 402 challenge but received ${challengeResponse.status}.`);
+      try {
+        const challengeResponse = await fetch(scenario.resourcePath);
+
+        if (challengeResponse.status !== 402) {
+          throw new Error(`Expected a 402 challenge but received ${challengeResponse.status}.`);
+        }
+
+        paymentRequiredHeader = challengeResponse.headers.get("PAYMENT-REQUIRED") ?? undefined;
+
+        if (!paymentRequiredHeader) {
+          throw new Error("Missing PAYMENT-REQUIRED header from paid resource.");
+        }
+
+        requirement = decodeBase64Json<PaymentRequirement>(paymentRequiredHeader);
+      } catch {
+        transport = "browser-sim";
+        requirement = scenario.requirement;
+        paymentRequiredHeader = encodeBase64Json(requirement);
       }
 
-      const paymentRequiredHeader = challengeResponse.headers.get("PAYMENT-REQUIRED");
-
-      if (!paymentRequiredHeader) {
-        throw new Error("Missing PAYMENT-REQUIRED header from paid resource.");
-      }
-
-      const requirement = decodeBase64Json<PaymentRequirement>(paymentRequiredHeader);
-      setResult({ requirement, paymentRequiredHeader });
+      setResult({ requirement, paymentRequiredHeader, transport });
       setStages((current) => updateStage(current, "challenge", "done"));
 
       setStages((current) => updateStage(current, "policy", "active"));
@@ -237,33 +250,46 @@ function App() {
       setStages((current) => updateStage(current, "sign", "done"));
 
       setStages((current) => updateStage(current, "retry", "active"));
-      const paidResponse = await fetch(scenario.resourcePath, {
-        headers: {
-          "PAYMENT-SIGNATURE": paymentSignatureHeader,
-        },
-      });
-      setStages((current) => updateStage(current, "retry", paidResponse.ok ? "done" : "error"));
+      let paymentResponseHeader: string | undefined;
+      let settlement: SettlementResponse;
+      let apiResult: PaidApiResponse;
 
-      if (!paidResponse.ok) {
-        throw new Error(`Paid retry failed with ${paidResponse.status}.`);
+      if (transport === "browser-sim") {
+        setStages((current) => updateStage(current, "retry", "done"));
+        setStages((current) => updateStage(current, "settle", "active"));
+        settlement = createSettlementResponse(requirement);
+        paymentResponseHeader = encodeBase64Json(settlement);
+        apiResult = scenario.result;
+      } else {
+        const paidResponse = await fetch(scenario.resourcePath, {
+          headers: {
+            "PAYMENT-SIGNATURE": paymentSignatureHeader,
+          },
+        });
+        setStages((current) => updateStage(current, "retry", paidResponse.ok ? "done" : "error"));
+
+        if (!paidResponse.ok) {
+          throw new Error(`Paid retry failed with ${paidResponse.status}.`);
+        }
+
+        setStages((current) => updateStage(current, "settle", "active"));
+        paymentResponseHeader = paidResponse.headers.get("PAYMENT-RESPONSE") ?? undefined;
+
+        if (!paymentResponseHeader) {
+          throw new Error("Missing PAYMENT-RESPONSE header after paid retry.");
+        }
+
+        const body = (await paidResponse.json()) as {
+          data: PaidApiResponse;
+          receipt: SettlementResponse;
+        };
+        settlement = decodeBase64Json<SettlementResponse>(paymentResponseHeader);
+        apiResult = body.data;
       }
-
-      setStages((current) => updateStage(current, "settle", "active"));
-      const paymentResponseHeader = paidResponse.headers.get("PAYMENT-RESPONSE");
-
-      if (!paymentResponseHeader) {
-        throw new Error("Missing PAYMENT-RESPONSE header after paid retry.");
-      }
-
-      const body = (await paidResponse.json()) as {
-        data: PaidApiResponse;
-        receipt: SettlementResponse;
-      };
-      const settlement = decodeBase64Json<SettlementResponse>(paymentResponseHeader);
 
       setResult((current) => ({
         ...current,
-        apiResult: body.data,
+        apiResult,
         settlement,
         paymentResponseHeader,
       }));
@@ -273,8 +299,8 @@ function App() {
       }));
       setStages((current) => updateStage(current, "settle", "done"));
       addAuditEvent({
-        title: "Payment settled",
-        detail: `${requirement.serviceName} settled ${formatCurrency(requirement.amountUsd)} with receipt ${shortHash(settlement.txHash)}.`,
+        title: transport === "browser-sim" ? "Payment simulated" : "Payment settled",
+        detail: `${requirement.serviceName} ${transport === "browser-sim" ? "simulated" : "settled"} ${formatCurrency(requirement.amountUsd)} with receipt ${shortHash(settlement.txHash)}.`,
         status: "settled",
       });
     } catch (runError) {
@@ -497,6 +523,13 @@ function App() {
               <p>Headers generated during the latest run.</p>
             </div>
           </div>
+
+          {result.transport === "browser-sim" ? (
+            <div className="transport-note">
+              Static fallback is active because no serverless API responded. Local and Vercel runs
+              use the real `/api/paid/*` resource server.
+            </div>
+          ) : null}
 
           <div className="transcript-stack">
             <TranscriptLine
