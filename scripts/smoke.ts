@@ -135,12 +135,15 @@ assert(body.receipt?.paymentId === requirement.paymentId, "Expected body receipt
 assert(settlement.paymentId === requirement.paymentId, "Expected PAYMENT-RESPONSE payment id to match");
 assert(settlement.status === "settled", "Expected settlement status to be settled");
 assert(Boolean(settlement.txHash), "Expected settlement receipt to include txHash");
+assert(settlement.receiptKind === "demo-facilitator", "Expected hosted demo receipt kind");
+assert(settlement.onchain === false, "Expected hosted demo receipt to be marked non-onchain");
+assert(Boolean(settlement.evidenceNote), "Expected settlement receipt to include evidence note");
 
 console.log(
   [
     "Smoke check passed:",
     `402 challenge -> PAYMENT-REQUIRED ${requirement.paymentId}`,
     "signed retry -> PAYMENT-RESPONSE",
-    `receipt ${settlement.txHash}`,
+    `${settlement.receiptKind} receipt ${settlement.txHash}`,
   ].join(" "),
 );

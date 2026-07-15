@@ -615,12 +615,45 @@ function App() {
                   <dd>{result.settlement.paymentId}</dd>
                 </div>
                 <div>
-                  <dt>Tx hash</dt>
+                  <dt>{result.settlement.onchain ? "Onchain tx" : "Receipt hash"}</dt>
                   <dd>{shortHash(result.settlement.txHash, 14, 8)}</dd>
                 </div>
                 <div>
+                  <dt>Receipt mode</dt>
+                  <dd>
+                    {result.settlement.receiptKind === "x402-facilitator"
+                      ? "Official x402 facilitator"
+                      : "Demo facilitator"}
+                  </dd>
+                </div>
+                {result.settlement.facilitatorUrl ? (
+                  <div>
+                    <dt>Facilitator</dt>
+                    <dd>{result.settlement.facilitatorUrl}</dd>
+                  </div>
+                ) : null}
+                {result.settlement.explorerUrl ? (
+                  <div>
+                    <dt>Explorer</dt>
+                    <dd>
+                      <a
+                        className="receipt-link"
+                        href={result.settlement.explorerUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View transaction
+                      </a>
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
                   <dt>API result</dt>
                   <dd>{result.apiResult.summary}</dd>
+                </div>
+                <div>
+                  <dt>Evidence</dt>
+                  <dd>{result.settlement.evidenceNote}</dd>
                 </div>
               </dl>
             </div>

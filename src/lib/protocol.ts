@@ -1,7 +1,16 @@
+export type PaymentNetwork =
+  | "eip155:8453"
+  | "eip155:84532"
+  | "eip155:137"
+  | "eip155:42161"
+  | "eip155:480"
+  | `eip155:${number}`
+  | `solana:${string}`;
+
 export type PaymentRequirement = {
   id: string;
   scheme: "exact";
-  network: "eip155:8453";
+  network: PaymentNetwork;
   asset: "USDC";
   amountUsd: number;
   maxAmountRequired: string;
@@ -20,11 +29,13 @@ export type PaymentPayload = {
   payer: string;
   amountUsd: number;
   asset: "USDC";
-  network: "eip155:8453";
+  network: PaymentNetwork;
   signedAt: string;
   policyDecisionId: string;
   signature: string;
 };
+
+export type ReceiptKind = "demo-facilitator" | "x402-facilitator";
 
 export type SettlementResponse = {
   status: "settled" | "rejected";
@@ -33,8 +44,13 @@ export type SettlementResponse = {
   txHash: string;
   amountUsd: number;
   asset: "USDC";
-  network: "eip155:8453";
+  network: PaymentNetwork;
   settledAt: string;
+  receiptKind: ReceiptKind;
+  onchain: boolean;
+  facilitatorUrl?: string;
+  explorerUrl?: string;
+  evidenceNote: string;
 };
 
 export type PaidApiResponse = {
@@ -156,6 +172,19 @@ export const verifyPaymentPayload = (
   return signature === expected;
 };
 
+export const buildExplorerUrl = (network: PaymentNetwork, transaction: string) => {
+  if (!transaction) return undefined;
+  if (network === "eip155:8453") return `https://basescan.org/tx/${transaction}`;
+  if (network === "eip155:84532") return `https://sepolia.basescan.org/tx/${transaction}`;
+  if (network.startsWith("solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1")) {
+    return `https://solscan.io/tx/${transaction}?cluster=devnet`;
+  }
+  if (network.startsWith("solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp")) {
+    return `https://solscan.io/tx/${transaction}`;
+  }
+  return undefined;
+};
+
 export const createSettlementResponse = (requirement: PaymentRequirement): SettlementResponse => {
   const digest = sha256(`${requirement.paymentId}:${requirement.amountUsd}:${Date.now()}`);
 
@@ -168,8 +197,45 @@ export const createSettlementResponse = (requirement: PaymentRequirement): Settl
     asset: requirement.asset,
     network: requirement.network,
     settledAt: new Date().toISOString(),
+    receiptKind: "demo-facilitator",
+    onchain: false,
+    evidenceNote:
+      "Judge-safe demo receipt generated after request-bound signature verification. Run npm run x402:pay with funded testnet credentials for an official facilitator receipt.",
   };
 };
+
+export const createFacilitatorSettlementResponse = ({
+  paymentId,
+  amountUsd,
+  asset = "USDC",
+  network,
+  transaction,
+  facilitatorUrl,
+  success,
+}: {
+  paymentId: string;
+  amountUsd: number;
+  asset?: "USDC";
+  network: PaymentNetwork;
+  transaction: string;
+  facilitatorUrl: string;
+  success: boolean;
+}): SettlementResponse => ({
+  status: success ? "settled" : "rejected",
+  paymentId,
+  settlementId: `x402_${sha256(`${paymentId}:${network}:${transaction}`).slice(0, 18)}`,
+  txHash: transaction,
+  amountUsd,
+  asset,
+  network,
+  settledAt: new Date().toISOString(),
+  receiptKind: "x402-facilitator",
+  onchain: Boolean(success && transaction),
+  facilitatorUrl,
+  explorerUrl: success ? buildExplorerUrl(network, transaction) : undefined,
+  evidenceNote:
+    "Official x402 facilitator receipt normalized from PAYMENT-RESPONSE. Explorer link is shown when the network is supported.",
+});
 
 export const shortHash = (value: string, start = 10, end = 6) =>
   value.length > start + end ? `${value.slice(0, start)}...${value.slice(-end)}` : value;

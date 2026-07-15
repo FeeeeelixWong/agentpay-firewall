@@ -595,6 +595,16 @@ dd {
   line-height: 1.4;
 }
 
+.receipt-link {
+  color: var(--accent);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.receipt-link:hover {
+  text-decoration: underline;
+}
+
 .audit-list li {
   display: grid;
   grid-template-columns: 74px 1fr;

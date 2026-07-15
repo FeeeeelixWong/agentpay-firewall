@@ -1,9 +1,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+type PaymentNetwork =
+  | "eip155:8453"
+  | "eip155:84532"
+  | "eip155:137"
+  | "eip155:42161"
+  | "eip155:480"
+  | `eip155:${number}`
+  | `solana:${string}`;
+
 type PaymentRequirement = {
   id: string;
   scheme: "exact";
-  network: "eip155:8453";
+  network: PaymentNetwork;
   asset: "USDC";
   amountUsd: number;
   maxAmountRequired: string;
@@ -22,11 +31,13 @@ type PaymentPayload = {
   payer: string;
   amountUsd: number;
   asset: "USDC";
-  network: "eip155:8453";
+  network: PaymentNetwork;
   signedAt: string;
   policyDecisionId: string;
   signature: string;
 };
+
+type ReceiptKind = "demo-facilitator" | "x402-facilitator";
 
 type SettlementResponse = {
   status: "settled" | "rejected";
@@ -35,8 +46,13 @@ type SettlementResponse = {
   txHash: string;
   amountUsd: number;
   asset: "USDC";
-  network: "eip155:8453";
+  network: PaymentNetwork;
   settledAt: string;
+  receiptKind: ReceiptKind;
+  onchain: boolean;
+  facilitatorUrl?: string;
+  explorerUrl?: string;
+  evidenceNote: string;
 };
 
 const demoAgentAddress = "0xA9eF111a9eF111A9Ef111A9Ef111A9eF111a9EF1";
@@ -132,6 +148,10 @@ const createSettlementResponse = (requirement: PaymentRequirement): SettlementRe
     asset: requirement.asset,
     network: requirement.network,
     settledAt: new Date().toISOString(),
+    receiptKind: "demo-facilitator",
+    onchain: false,
+    evidenceNote:
+      "Judge-safe demo receipt generated after request-bound signature verification. Run npm run x402:pay with funded testnet credentials for an official facilitator receipt.",
   };
 };
 

@@ -11,7 +11,7 @@ It demonstrates a policy wallet for AI agents:
 - the resource server verifies the payload and returns `PAYMENT-RESPONSE`
 - every approval, block, review, and settlement is shown in the audit log
 
-The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe demo signer/facilitator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The production path is to replace the demo signer/facilitator with official x402 client, server, and chain-specific packages.
+The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe demo signer/facilitator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The repo also includes an official x402 SDK/facilitator harness for funded testnet verification.
 
 ## Live Links
 
@@ -73,7 +73,9 @@ AgentPay Firewall inserts a policy layer between the agent and the x402 signer. 
 - TypeScript
 - Vite
 - Node.js local HTTP server
-- x402-style payment headers
+- Vercel serverless API routes
+- `@x402/express`, `@x402/fetch`, `@x402/evm`, `@x402/core`
+- `viem` signer support
 
 ## Tests
 
@@ -81,6 +83,22 @@ AgentPay Firewall inserts a policy layer between the agent and the x402 signer. 
 npm test
 npm run build
 npm run smoke
+npm run x402:ready
 ```
 
 `npm run smoke` defaults to the public Vercel deployment and validates the complete hosted flow: `402 -> PAYMENT-REQUIRED -> PAYMENT-SIGNATURE -> paid retry -> PAYMENT-RESPONSE`. Use `BASE_URL=http://127.0.0.1:8787 npm run smoke` while the local API is running.
+
+## Official x402 Harness
+
+The default demo receipt is marked `demo-facilitator` and `onchain: false` so it cannot be confused with a real transaction. To verify the production path with official packages:
+
+```bash
+npm run x402:ready
+X402_PAY_TO=0xYourReceivingWallet npm run dev:x402
+npm run x402:challenge
+X402_EVM_PRIVATE_KEY=0xYourFundedBuyerKey npm run x402:pay
+```
+
+The official harness uses `@x402/express`, `@x402/fetch`, `@x402/evm`, and `@x402/core`. Defaults are Base Sepolia (`eip155:84532`) and `https://x402.org/facilitator`; set `X402_MODE=mainnet`, `X402_NETWORK=eip155:8453`, `X402_FACILITATOR_URL`, and CDP credentials for mainnet/CDP facilitator testing.
+
+The package file pins `viem` with an npm `overrides` entry because the current `@x402/evm@2.18.0` peer dependency range points beyond the latest `viem` version available from the registry in this environment.

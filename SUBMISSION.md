@@ -6,7 +6,7 @@ AgentPay Firewall is a policy wallet for AI agents that enforces budgets, allowl
 
 ## What Is Live
 
-The primary public demo is deployed on Vercel and uses serverless `/api/paid/*` resource routes, not a static mock. Judges can open the app and run the full browser-visible flow:
+The primary public demo is deployed on Vercel and uses serverless `/api/paid/*` resource routes, not a static mock. This is the first thing judges should evaluate: it runs a real hosted HTTP flow with `402`, `PAYMENT-REQUIRED`, signed retry, and `PAYMENT-RESPONSE`.
 
 1. The paid resource returns HTTP `402` with `PAYMENT-REQUIRED`.
 2. The policy wallet evaluates amount, daily budget, service allowlist, asset, network, and risk score.
@@ -14,7 +14,14 @@ The primary public demo is deployed on Vercel and uses serverless `/api/paid/*` 
 4. The client retries the same paid resource.
 5. The server verifies the request-bound payment payload and returns `PAYMENT-RESPONSE` plus a settlement receipt.
 
-The GitHub Pages mirror is a static fallback only. The Vercel deployment is the judge-facing path for the real HTTP transport demo.
+The receipt is explicitly marked `demo-facilitator` and `onchain: false`, because the public judge demo should not require funded wallets or spend real/testnet funds. The repo also includes an official x402 SDK/facilitator harness:
+
+- `server/x402-official.ts`: official `@x402/express` seller middleware with `x402ResourceServer`, `ExactEvmScheme`, and `HTTPFacilitatorClient`.
+- `scripts/x402-official-readiness.ts`: proves the official SDK path loads and reports missing funded-wallet env.
+- `scripts/x402-official-challenge.ts`: asserts the official protected route returns `402` and a decodable x402 `PAYMENT-REQUIRED`.
+- `scripts/x402-official-pay.ts`: uses official `@x402/fetch` to pay a protected route and normalize the facilitator `PAYMENT-RESPONSE` into receipt/explorer evidence.
+
+The GitHub Pages mirror is a static fallback only. The Vercel deployment is the judge-facing path for the real HTTP transport demo; the official harness is the production settlement path when funded credentials are available.
 
 ## About the Project
 
@@ -46,7 +53,7 @@ The implementation demonstrates the x402 lifecycle:
 4. **Retry**: client retries the same paid resource with the signed payload.
 5. **Settle**: server verifies the payment payload and returns `PAYMENT-RESPONSE`.
 
-The Vercel/serverless and local implementations include a real `/api/paid/*` resource server. The GitHub Pages mirror uses a browser fallback because GitHub Pages cannot run serverless API routes; it is clearly labeled in the UI.
+The Vercel/serverless and local implementations include a real `/api/paid/*` resource server. The official production harness additionally uses `@x402/express`, `@x402/fetch`, `@x402/evm`, and `@x402/core` for Base Sepolia/CDP-ready settlement. The GitHub Pages mirror uses a browser fallback because GitHub Pages cannot run serverless API routes; it is clearly labeled in the UI.
 
 ### What Makes It Different
 
@@ -56,7 +63,7 @@ The signature payload is request-bound: it includes the resource, service, payme
 
 ### Challenges
 
-The main challenge was designing a demo that is understandable to judges while still showing the real protocol shape. A full onchain x402 facilitator integration requires funded wallets and external settlement infrastructure, which is risky for a judge-facing demo. This MVP keeps the protocol headers, payment lifecycle, signature verification, and policy decisions visible while keeping the demo safe and deterministic.
+The main challenge was designing a demo that is understandable to judges while still showing the real protocol shape. A full onchain x402 facilitator run requires funded wallets and external settlement infrastructure, which is risky for a judge-facing public demo. The MVP therefore keeps the Vercel flow safe and deterministic, while the repo includes the official x402 harness for testnet/mainnet verification with real credentials.
 
 ### What I Learned
 
@@ -64,7 +71,7 @@ Agentic payments need a wallet, but the wallet is not the product moat. The moat
 
 ### What's Next
 
-- Connect to the official x402 TypeScript SDK and facilitator.
+- Run the official x402 harness with a funded Base Sepolia wallet and attach the resulting explorer transaction.
 - Add persistent policy storage and replay protection.
 - Support smart accounts/session keys for onchain-enforced limits.
 - Add merchant and agent reputation.
@@ -87,6 +94,17 @@ npm run smoke
 ```
 
 `npm run smoke` defaults to `https://agentpay-firewall.vercel.app` and verifies `402 -> PAYMENT-REQUIRED -> PAYMENT-SIGNATURE -> paid retry -> PAYMENT-RESPONSE`.
+
+To verify the official x402 SDK/facilitator path:
+
+```bash
+npm run x402:ready
+X402_PAY_TO=0xYourReceivingWallet npm run dev:x402
+npm run x402:challenge
+X402_EVM_PRIVATE_KEY=0xYourFundedBuyerKey npm run x402:pay
+```
+
+Defaults are Base Sepolia (`eip155:84532`) and `https://x402.org/facilitator`. Mainnet/CDP can be selected with `X402_MODE=mainnet`, `X402_NETWORK=eip155:8453`, `X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402`, `CDP_API_KEY_ID`, and `CDP_API_KEY_SECRET`.
 
 To verify the same flow locally:
 
@@ -115,4 +133,4 @@ npm run build
 BASE_URL=http://127.0.0.1:8787 npm run smoke
 ```
 
-Production architecture notes are in [ARCHITECTURE.md](ARCHITECTURE.md), including the official x402 SDK/facilitator replacement path for real signatures, verification, settlement, and explorer-linked receipts.
+Production architecture notes are in [ARCHITECTURE.md](ARCHITECTURE.md), including the official x402 SDK/facilitator path for real signatures, verification, settlement, and explorer-linked receipts.
