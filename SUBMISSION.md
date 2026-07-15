@@ -34,7 +34,7 @@ The implementation demonstrates the x402 lifecycle:
 4. **Retry**: client retries the same paid resource with the signed payload.
 5. **Settle**: server verifies the payment payload and returns `PAYMENT-RESPONSE`.
 
-The local and Vercel/serverless implementation includes a real `/api/paid/*` resource server. The GitHub Pages demo uses a browser fallback because GitHub Pages cannot run serverless API routes; it is clearly labeled in the UI.
+The Vercel/serverless and local implementations include a real `/api/paid/*` resource server. The GitHub Pages mirror uses a browser fallback because GitHub Pages cannot run serverless API routes; it is clearly labeled in the UI.
 
 ### What Makes It Different
 
@@ -60,8 +60,9 @@ Agentic payments need a wallet, but the wallet is not the product moat. The moat
 
 ## Links
 
-- Public demo: https://feeeeelixwong.github.io/agentpay-firewall/
-- Demo video: https://feeeeelixwong.github.io/agentpay-firewall/agentpay-firewall-demo.mp4
+- Public demo: https://agentpay-firewall.vercel.app/
+- Demo video: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
+- Static fallback demo: https://feeeeelixwong.github.io/agentpay-firewall/
 - GitHub: https://github.com/FeeeeelixWong/agentpay-firewall
 
 ## Notes for Judges
