@@ -13,6 +13,13 @@ It demonstrates a policy wallet for AI agents:
 
 The demo uses an x402-shaped local simulator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The production path is to replace the demo signer/facilitator with the official `@x402/fetch`, `@x402/express`, and chain-specific signing packages.
 
+## Live Links
+
+- Public demo: https://feeeeelixwong.github.io/agentpay-firewall/
+- Demo video: https://feeeeelixwong.github.io/agentpay-firewall/agentpay-firewall-demo.mp4
+- Submission notes: [SUBMISSION.md](SUBMISSION.md)
+- Demo script: [docs/demo-script.md](docs/demo-script.md)
+
 ## Quick Start
 
 ```bash
