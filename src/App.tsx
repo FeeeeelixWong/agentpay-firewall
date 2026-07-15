@@ -191,7 +191,16 @@ function App() {
       let requirement: PaymentRequirement;
 
       try {
-        const challengeResponse = await fetch(scenario.resourcePath);
+        if (window.location.hostname.endsWith("github.io")) {
+          throw new Error("Static GitHub Pages host");
+        }
+
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 2_000);
+        const challengeResponse = await fetch(scenario.resourcePath, {
+          signal: controller.signal,
+        });
+        window.clearTimeout(timeoutId);
 
         if (challengeResponse.status !== 402) {
           throw new Error(`Expected a 402 challenge but received ${challengeResponse.status}.`);
