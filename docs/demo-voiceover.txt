@@ -1,0 +1,15 @@
+Agent Pay Firewall turns autonomous payments into policy-controlled infrastructure.
+
+AI agents can call paid APIs, but they should not spend from a wallet without rules.
+
+Here, the user defines the mandate: max request cost, daily budget, approved services, network, asset, risk score, and human approval threshold.
+
+First, the agent calls a paid wallet-risk API. The server returns an HTTP four oh two payment-required challenge.
+
+The firewall checks every gate. Because the request is safe, it signs, retries, and receives a settlement receipt.
+
+Now the unsafe path. A larger request from an untrusted service gets the same challenge, but policy fails before signing.
+
+No signature leaves the wallet. No payment is authorized. The audit log records the exact reason.
+
+Most demos prove that agents can pay. Agent Pay Firewall proves they can pay within a user-controlled budget, policy, and risk envelope.

@@ -61,7 +61,7 @@ Agentic payments need a wallet, but the wallet is not the product moat. The moat
 ## Links
 
 - Public demo: https://agentpay-firewall.vercel.app/
-- Demo video: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
+- Demo video with English voiceover: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
 - Static fallback demo: https://feeeeelixwong.github.io/agentpay-firewall/
 - GitHub: https://github.com/FeeeeelixWong/agentpay-firewall
 

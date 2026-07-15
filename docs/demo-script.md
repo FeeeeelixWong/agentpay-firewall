@@ -1,6 +1,8 @@
 # AgentPay Firewall Demo Script
 
-Target length: 2 minutes.
+Production recording: 53 seconds, with English voiceover in [demo-voiceover.txt](demo-voiceover.txt).
+
+The longer outline below is kept as the source narrative for future extended demos.
 
 ## 0:00 - 0:15 Problem
 

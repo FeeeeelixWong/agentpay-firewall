@@ -16,10 +16,11 @@ The demo uses an x402-shaped local simulator so judges can run the full Challeng
 ## Live Links
 
 - Public demo: https://agentpay-firewall.vercel.app/
-- Demo video: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
+- Demo video with English voiceover: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
 - Static fallback demo: https://feeeeelixwong.github.io/agentpay-firewall/
 - Submission notes: [SUBMISSION.md](SUBMISSION.md)
 - Demo script: [docs/demo-script.md](docs/demo-script.md)
+- Voiceover transcript: [docs/demo-voiceover.txt](docs/demo-voiceover.txt)
 
 ## Quick Start
 
