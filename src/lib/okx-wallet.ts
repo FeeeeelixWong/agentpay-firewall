@@ -108,6 +108,12 @@ const OKX_SUPPORTED_EVM_CHAINS: Partial<Record<PaymentNetwork, OkxChainConfig>> 
   },
 };
 
+const isLocalhostUrl = (url: URL) =>
+  ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
+
+const localX402Help =
+  "For the default local resource, run `X402_PAY_TO=0x4a6aae28b27681856ae824af82fea87896ecc3ed npm run dev:x402` and open the app from `http://127.0.0.1:5176` with `npm run dev:web`.";
+
 const getOkxProvider = (): Eip1193Provider => {
   const candidateWindow = window as OkxWindow;
   const injectedOkxProvider = candidateWindow.ethereum?.providers?.find(
@@ -273,13 +279,45 @@ const normalizeOfficialChallenge = (
 export const fetchOfficialX402Challenge = async (
   targetUrl: string,
 ): Promise<OfficialX402Challenge> => {
-  const response = await fetch(targetUrl, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
+  let parsedTarget: URL;
+
+  try {
+    parsedTarget = new URL(targetUrl);
+  } catch {
+    throw new Error("Official resource URL is not a valid URL.");
+  }
+
+  if (
+    window.location.protocol === "https:" &&
+    parsedTarget.protocol === "http:" &&
+    isLocalhostUrl(parsedTarget)
+  ) {
+    throw new Error(
+      `The hosted HTTPS demo cannot call a local HTTP x402 server at ${targetUrl}. ${localX402Help}`,
+    );
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(targetUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown network error";
+
+    if (isLocalhostUrl(parsedTarget)) {
+      throw new Error(
+        `Could not reach the local official x402 resource at ${targetUrl}. ${localX402Help} Browser error: ${message}`,
+      );
+    }
+
+    throw new Error(`Could not reach the official x402 resource at ${targetUrl}: ${message}`);
+  }
 
   if (response.status !== 402) {
     throw new Error(`Expected official x402 402 challenge, got ${response.status}.`);

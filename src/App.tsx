@@ -598,6 +598,10 @@ function App() {
                 disabled={isRunning}
               />
             </label>
+            <p className="wallet-help">
+              Local x402 resources require `npm run dev:x402` and the local app at
+              `http://127.0.0.1:5176`; hosted HTTPS pages cannot call local HTTP URLs.
+            </p>
             <button
               type="button"
               className="wallet-action"

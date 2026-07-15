@@ -431,6 +431,14 @@ h2 {
   font-size: 12px;
 }
 
+.wallet-help {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .wallet-action {
   display: inline-flex;
   align-items: center;
