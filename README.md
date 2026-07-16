@@ -18,6 +18,8 @@ The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe 
 - Public demo: https://agentpay-firewall.vercel.app/
 - Demo video with English voiceover: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
 - Static fallback demo: https://feeeeelixwong.github.io/agentpay-firewall/
+- Verified x402 settlement: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
+- Settlement evidence JSON: [docs/x402-settlement-evidence.json](docs/x402-settlement-evidence.json)
 - Submission notes: [SUBMISSION.md](SUBMISSION.md)
 - Production architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Demo script: [docs/demo-script.md](docs/demo-script.md)
@@ -118,3 +120,13 @@ npm run dev:web
 ```
 
 Open `http://127.0.0.1:5176`, use the **Sign x402 with OKX** button, and confirm the typed-data signature in the OKX browser extension. OKX Wallet's documented network list includes Base mainnet (`eip155:8453`) but not Base Sepolia (`eip155:84532`), so the browser path does not force a Base Sepolia chain switch. For the default Base Sepolia testnet challenge, it asks OKX to sign the EIP-712 x402 authorization directly; if your OKX build refuses unknown-chain typed data, verify Base Sepolia with the CLI harness or point `VITE_X402_TARGET_URL` at an OKX-supported mainnet x402 resource.
+
+Verified settlement evidence:
+
+```text
+Network: Base Sepolia (eip155:84532)
+Payer: 0x0934146ca4f8e611da0ef8bd295ee9f7e34741fe
+Pay to: 0x4a6aae28b27681856ae824af82fea87896ecc3ed
+Amount: 0.001 USDC
+Transaction: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
+```

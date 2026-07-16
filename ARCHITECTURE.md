@@ -227,6 +227,19 @@ explorerUrl = network-specific explorer link when supported
 
 The OKX Wallet browser path uses the same `createFacilitatorSettlementResponse` normalization. The only difference is the signer: the CLI harness signs through a process environment private key, while the browser product path signs through OKX Wallet's extension popup and only receives the resulting signature. This keeps the buyer key out of the web app even when the seller is still the local official x402 Base Sepolia test route.
 
+Verified OKX Wallet settlement:
+
+```text
+Network: Base Sepolia (eip155:84532)
+Payer: 0x0934146ca4f8e611da0ef8bd295ee9f7e34741fe
+Pay to: 0x4a6aae28b27681856ae824af82fea87896ecc3ed
+Token: USDC at 0x036CbD53842c5426634e7929541eC2318f3dCF7e
+Amount: 1000 atomic units = 0.001 USDC
+Block: 44196133
+Transaction: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
+Evidence JSON: docs/x402-settlement-evidence.json
+```
+
 Explorer mapping currently supports:
 
 - Base mainnet: `https://basescan.org/tx/{transaction}`
@@ -258,7 +271,7 @@ The current repo does not ship real secrets or a funded wallet. A real mainnet r
 2. Reject reused signatures outside the original resource, amount, network, service, and expiration window.
 3. Add smart accounts or session keys for hard onchain limits.
 4. Extend official harness to Solana/SVM if the track rewards multi-chain settlement.
-5. Attach either a funded OKX Wallet transaction/explorer link on an OKX-supported x402 network, or a funded Base Sepolia CLI transaction/explorer link, once the final settlement run is recorded.
+5. Add a hosted official x402 seller endpoint so the OKX Wallet flow can be reproduced without running the local `dev:x402` server.
 
 ## References
 

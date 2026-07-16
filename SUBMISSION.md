@@ -24,6 +24,16 @@ The receipt is explicitly marked `demo-facilitator` and `onchain: false`, becaus
 
 The GitHub Pages mirror is a static fallback only. The Vercel deployment is the judge-facing path for the real HTTP transport demo. The OKX Wallet browser path is the production-like settlement path: the buyer key never leaves the wallet extension, and the app only receives a signed x402 payment header and the facilitator receipt.
 
+Verified real x402 settlement evidence:
+
+- Network: Base Sepolia (`eip155:84532`)
+- Payer: `0x0934146ca4f8e611da0ef8bd295ee9f7e34741fe`
+- Pay to: `0x4a6aae28b27681856ae824af82fea87896ecc3ed`
+- Asset: USDC (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`)
+- Amount: `0.001 USDC`
+- Transaction: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
+- Evidence file: [docs/x402-settlement-evidence.json](docs/x402-settlement-evidence.json)
+
 ## About the Project
 
 ### Inspiration
@@ -72,7 +82,6 @@ Agentic payments need a wallet, but the wallet is not the product moat. The moat
 
 ### What's Next
 
-- Attach a funded OKX Wallet run on an OKX-supported x402 network, or a Base Sepolia CLI run, with the resulting facilitator receipt and explorer transaction.
 - Add persistent policy storage and replay protection.
 - Support smart accounts/session keys for onchain-enforced limits.
 - Add merchant and agent reputation.
@@ -82,6 +91,7 @@ Agentic payments need a wallet, but the wallet is not the product moat. The moat
 
 - Public demo: https://agentpay-firewall.vercel.app/
 - Demo video with English voiceover: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
+- Verified x402 settlement: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
 - Static fallback demo: https://feeeeelixwong.github.io/agentpay-firewall/
 - GitHub: https://github.com/FeeeeelixWong/agentpay-firewall
 

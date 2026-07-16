@@ -1,0 +1,18 @@
+{
+  "evidence": "official-x402-okx-wallet-settlement",
+  "status": "settled",
+  "network": "eip155:84532",
+  "networkName": "Base Sepolia",
+  "scheme": "exact",
+  "asset": "USDC",
+  "tokenAddress": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "amountAtomic": "1000",
+  "amountUsd": 0.001,
+  "payer": "0x0934146ca4f8e611da0ef8bd295ee9f7e34741fe",
+  "payTo": "0x4a6aae28b27681856ae824af82fea87896ecc3ed",
+  "transactionHash": "0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da",
+  "blockNumber": 44196133,
+  "explorerUrl": "https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da",
+  "walletEvidence": "OKX Wallet signed the x402 EIP-712 payload through eth_signTypedData_v4; the facilitator settled the request as a Base Sepolia USDC transfer.",
+  "uiReceipt": "OKX Wallet payment settled: 0x0934146ca4f8e611da0ef8bd295ee9f7e34741fe settled $0.001 with official x402 receipt 0x322c19b1...cdc6da."
+}
