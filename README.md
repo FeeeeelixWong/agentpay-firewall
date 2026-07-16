@@ -21,6 +21,7 @@ The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe 
 - Verified x402 settlement: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
 - Settlement evidence JSON: [docs/x402-settlement-evidence.json](docs/x402-settlement-evidence.json)
 - Submission notes: [SUBMISSION.md](SUBMISSION.md)
+- Devpost project story: [docs/devpost-project-story.md](docs/devpost-project-story.md)
 - Production architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Demo script: [docs/demo-script.md](docs/demo-script.md)
 - Voiceover transcript: [docs/demo-voiceover.txt](docs/demo-voiceover.txt)
