@@ -1,31 +1,39 @@
 1
-00:00:00,000 --> 00:00:05,700
-AgentPay Firewall turns autonomous payments into policy-controlled infrastructure.
+00:00:00,000 --> 00:00:05,800
+AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.
 
 2
-00:00:05,700 --> 00:00:12,500
-AI agents can call paid APIs, but they should not spend from a wallet without rules.
+00:00:05,800 --> 00:00:12,800
+AI agents can call paid APIs, but they should not spend from a wallet without rules, budgets, and audit trails.
 
 3
-00:00:12,500 --> 00:00:20,700
-The user defines the mandate: max request cost, daily budget, approved services, network, asset, risk score, and human approval.
+00:00:12,800 --> 00:00:21,300
+The user defines the mandate: request cap, daily budget, approved services, network, asset, risk score, and human approval threshold.
 
 4
-00:00:20,700 --> 00:00:27,300
-First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 payment-required challenge.
+00:00:21,300 --> 00:00:29,500
+First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 challenge with PAYMENT-REQUIRED.
 
 5
-00:00:27,300 --> 00:00:35,300
-The firewall checks every gate. Because the request is safe, it signs, retries, and receives a settlement receipt.
+00:00:29,500 --> 00:00:38,000
+The firewall checks every gate. This request passes, so it signs, retries, and receives PAYMENT-RESPONSE.
 
 6
-00:00:35,300 --> 00:00:43,800
-Now the unsafe path: a larger request from an untrusted service gets the same challenge, but policy fails before signing.
+00:00:38,000 --> 00:00:47,000
+Now the unsafe path. A costly non-allowlisted crawl gets the same challenge, but policy fails before signing.
 
 7
-00:00:43,800 --> 00:00:48,500
-No signature leaves the wallet. No payment is authorized. The audit log records the exact reason.
+00:00:47,000 --> 00:00:55,000
+A third request is allowed, but crosses the human approval threshold. The wallet pauses instead of silently spending.
 
 8
-00:00:48,500 --> 00:00:53,400
-Most demos prove that agents can pay. AgentPay Firewall proves they can pay within user-controlled policy.
+00:00:55,000 --> 00:01:04,000
+For the production path, the buyer key stays inside OKX Wallet. The app asks OKX to sign x402 typed data with eth_signTypedData_v4.
+
+9
+00:01:04,000 --> 00:01:15,500
+We reproduced that path on Base Sepolia. The facilitator settled 0.001 USDC and returned an official x402 receipt with an explorer transaction.
+
+10
+00:01:15,500 --> 00:01:22,866
+So the project is not just another agent wallet. It is the control layer that decides when autonomous payments are safe to execute.

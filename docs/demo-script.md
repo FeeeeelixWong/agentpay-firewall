@@ -1,45 +1,63 @@
 # AgentPay Firewall Demo Script
 
-Production recording: 53 seconds, with English voiceover in [demo-voiceover.txt](demo-voiceover.txt).
+Production recording: about 80 seconds, with English voiceover in [demo-voiceover.txt](demo-voiceover.txt).
 
-The longer outline below is kept as the source narrative for future extended demos.
+Regenerate the video, WebM fallback, voiceover transcript, and subtitle file with:
 
-## 0:00 - 0:15 Problem
+```bash
+npm run record:demo
+```
 
-AI agents are starting to call paid APIs and buy digital services. But giving an autonomous agent raw signing power is unsafe.
+The recording starts the local Vite app and local `/api/paid/*` resource server when they are not already running, then writes:
 
-AgentPay Firewall is a policy wallet for x402 payments. It lets the agent pay only when the request fits the user's rules.
+- `docs/media/agentpay-firewall-demo.mp4`
+- `docs/media/agentpay-firewall-demo.webm`
+- `docs/media/agentpay-firewall-demo.srt`
+- `public/agentpay-firewall-demo.mp4`
+- `public/agentpay-firewall-demo.webm`
+- `public/agentpay-firewall-demo.srt`
 
-## 0:15 - 0:35 Policy Setup
+## Storyboard
 
-Here is the wallet policy: max per request, daily budget, human approval threshold, and allowed services.
+### 0:00 - 0:06 Hook
 
-The key idea is simple: the agent can act, but only inside this mandate.
+AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.
 
-## 0:35 - 1:10 Allowed x402 Payment
+### 0:06 - 0:13 Problem
 
-First, the research agent needs one wallet-risk label before answering a user.
+AI agents can call paid APIs, but they should not spend from a wallet without rules, budgets, and audit trails.
 
-When I run the flow, the paid API returns an HTTP 402 challenge with `PAYMENT-REQUIRED`.
+### 0:13 - 0:21 Policy Mandate
 
-The wallet checks the service allowlist, amount cap, daily budget, USDC asset, Base network, and risk score.
+The user defines request caps, daily budget, approved services, network, asset, risk score, and human approval threshold.
 
-Everything passes, so the wallet creates a `PAYMENT-SIGNATURE`, retries the request, and receives a `PAYMENT-RESPONSE` settlement receipt.
+### 0:21 - 0:38 Allowed x402 Flow
 
-## 1:10 - 1:40 Blocked Payment
+The agent calls a paid wallet-risk API. The server returns an HTTP 402 `PAYMENT-REQUIRED` challenge. The firewall checks policy, signs the request, retries the paid API, and receives `PAYMENT-RESPONSE`.
 
-Now the same agent tries to buy a larger web crawl from a non-allowlisted service.
+### 0:38 - 0:47 Blocked Flow
 
-The wallet still receives the payment challenge, but policy fails before signing.
+A costly non-allowlisted crawl receives the same x402 challenge, but policy fails before signing. No payment authorization is created.
 
-No `PAYMENT-SIGNATURE` is generated, the paid API does not receive authorization, and the audit log records the reason.
+### 0:47 - 0:55 Manual Review
 
-## 1:40 - 1:55 Why It Matters
+An allowed service crosses the approval threshold. The wallet pauses the payment instead of silently spending.
 
-Most agent payment demos prove that an agent can pay. AgentPay Firewall proves that an agent can be constrained.
+### 0:55 - 1:04 Official OKX Path
 
-That is the difference between a demo wallet and infrastructure people can trust.
+The production-like path keeps the buyer key inside OKX Wallet and asks OKX to sign the x402 EIP-712 payload with `eth_signTypedData_v4`.
 
-## 1:55 - 2:05 Close
+### 1:04 - 1:16 Real Settlement Proof
 
-Next steps are official x402 facilitator integration, persistent replay protection, and onchain smart-account enforcement.
+The video shows the reproduced Base Sepolia settlement:
+
+- Official x402 receipt status: `settled`
+- Amount: `0.001 USDC`
+- Payer: `0x0934146ca4f8e611da0ef8bd295ee9f7e34741fe`
+- PayTo: `0x4a6aae28b27681856ae824af82fea87896ecc3ed`
+- Transaction: `0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da`
+- Explorer: `https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da`
+
+### 1:16 - 1:23 Close
+
+AgentPay Firewall is the control layer that decides when autonomous payments are safe to execute.

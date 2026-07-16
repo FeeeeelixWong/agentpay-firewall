@@ -1,49 +1,250 @@
-import { mkdir, copyFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { readFile, writeFile, mkdir, copyFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 
+const appUrl = "http://127.0.0.1:5176";
+const directApiHealthUrl = "http://127.0.0.1:8787/api/health";
+const proxiedApiHealthUrl = `${appUrl}/api/health`;
+const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+
 const outputDir = resolve("docs/media");
-const tempVideoDir = resolve("tmp/demo-video");
-const finalWebm = join(outputDir, "agentpay-firewall-demo.webm");
+const publicDir = resolve("public");
+const tempDir = resolve("tmp/demo-video");
 
-await mkdir(outputDir, { recursive: true });
-await mkdir(tempVideoDir, { recursive: true });
+const rawWebm = join(tempDir, "agentpay-firewall-demo.raw.webm");
+const voiceoverAudio = join(tempDir, "agentpay-firewall-demo.aiff");
+const docsMp4 = join(outputDir, "agentpay-firewall-demo.mp4");
+const docsWebm = join(outputDir, "agentpay-firewall-demo.webm");
+const docsSrt = join(outputDir, "agentpay-firewall-demo.srt");
+const publicMp4 = join(publicDir, "agentpay-firewall-demo.mp4");
+const publicWebm = join(publicDir, "agentpay-firewall-demo.webm");
+const publicSrt = join(publicDir, "agentpay-firewall-demo.srt");
+const voiceoverFile = resolve("docs/demo-voiceover.txt");
+const evidenceFile = resolve("docs/x402-settlement-evidence.json");
 
-const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({
-  viewport: { width: 1280, height: 720 },
-  deviceScaleFactor: 1,
-  recordVideo: {
-    dir: tempVideoDir,
-    size: { width: 1280, height: 720 },
+const segments = [
+  {
+    duration: 5.8,
+    caption: "AgentPay Firewall: policy-controlled agent payments.",
+    voiceover:
+      "AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.",
   },
-});
-
-const page = await context.newPage();
+  {
+    duration: 7.0,
+    caption: "Agents can pay. Wallets still need rules.",
+    voiceover:
+      "AI agents can call paid APIs, but they should not spend from a wallet without rules, budgets, and audit trails.",
+  },
+  {
+    duration: 8.5,
+    caption: "Mandate: caps, budgets, allowlists, risk, approval.",
+    voiceover:
+      "The user defines the mandate: request cap, daily budget, approved services, network, asset, risk score, and human approval threshold.",
+  },
+  {
+    duration: 8.2,
+    caption: "Allowed flow: paid wallet-risk API returns HTTP 402.",
+    voiceover:
+      "First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 challenge with PAYMENT-REQUIRED.",
+  },
+  {
+    duration: 8.5,
+    caption: "Policy passed: sign, retry, receive PAYMENT-RESPONSE.",
+    voiceover:
+      "The firewall checks every gate. This request passes, so it signs, retries, and receives PAYMENT-RESPONSE.",
+  },
+  {
+    duration: 9.0,
+    caption: "Blocked flow: untrusted overspend stops before signing.",
+    voiceover:
+      "Now the unsafe path. A costly non-allowlisted crawl gets the same challenge, but policy fails before signing.",
+  },
+  {
+    duration: 8.0,
+    caption: "Manual review: allowed service, approval required.",
+    voiceover:
+      "A third request is allowed, but crosses the human approval threshold. The wallet pauses instead of silently spending.",
+  },
+  {
+    duration: 9.0,
+    caption: "Official path: OKX Wallet signs x402 typed data.",
+    voiceover:
+      "For the production path, the buyer key stays inside OKX Wallet. The app asks OKX to sign x402 typed data with eth_signTypedData_v4.",
+  },
+  {
+    duration: 11.5,
+    caption: "Verified settlement: 0.001 USDC on Base Sepolia.",
+    voiceover:
+      "We reproduced that path on Base Sepolia. The facilitator settled 0.001 USDC and returned an official x402 receipt with an explorer transaction.",
+  },
+  {
+    duration: 7.366,
+    caption: "Control layer for agentic payments.",
+    voiceover:
+      "So the project is not just another agent wallet. It is the control layer that decides when autonomous payments are safe to execute.",
+  },
+];
 
 const pause = (ms) => new Promise((resolvePause) => setTimeout(resolvePause, ms));
 
-await page.goto("http://127.0.0.1:5176", { waitUntil: "networkidle" });
-await page.addStyleTag({
-  content: `
-    #demo-caption {
-      position: fixed;
-      left: 32px;
-      right: 32px;
-      bottom: 24px;
-      z-index: 99999;
-      border: 1px solid rgba(215, 223, 217, 0.9);
-      border-radius: 8px;
-      background: rgba(19, 32, 27, 0.92);
-      color: #e5fff3;
-      font: 700 22px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      padding: 14px 18px;
-      box-shadow: 0 18px 44px rgba(41, 52, 47, 0.18);
-    }
-  `,
-});
+const run = (command, args, options = {}) =>
+  new Promise((resolveRun, rejectRun) => {
+    const child = spawn(command, args, {
+      cwd: resolve("."),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...options,
+    });
+    let stdout = "";
+    let stderr = "";
 
-const caption = async (text) => {
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", rejectRun);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolveRun({ stdout, stderr });
+        return;
+      }
+
+      rejectRun(
+        new Error(
+          `${command} ${args.join(" ")} failed with code ${code}\n${stdout}\n${stderr}`,
+        ),
+      );
+    });
+  });
+
+const reachable = async (url) => {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(1_500) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+const spawnDevProcess = (scriptName) => {
+  const child = spawn(npmCommand, ["run", scriptName], {
+    cwd: resolve("."),
+    env: { ...process.env, BROWSER: "none" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const logs = [];
+
+  const collect = (chunk) => {
+    logs.push(chunk.toString());
+    if (logs.length > 40) logs.shift();
+  };
+
+  child.stdout?.on("data", collect);
+  child.stderr?.on("data", collect);
+
+  return {
+    child,
+    logs,
+    stop: () => {
+      if (!child.killed) child.kill("SIGTERM");
+    },
+  };
+};
+
+const ensureLocalStack = async () => {
+  const processes = [];
+
+  if (!(await reachable(directApiHealthUrl))) {
+    processes.push(spawnDevProcess("dev:api"));
+  }
+
+  if (!(await reachable(appUrl))) {
+    processes.push(spawnDevProcess("dev:web"));
+  }
+
+  const deadline = Date.now() + 45_000;
+
+  while (Date.now() < deadline) {
+    if ((await reachable(appUrl)) && (await reachable(proxiedApiHealthUrl))) {
+      return () => {
+        for (const processInfo of processes) processInfo.stop();
+      };
+    }
+
+    await pause(1_000);
+  }
+
+  for (const processInfo of processes) processInfo.stop();
+
+  throw new Error(
+    `Timed out waiting for local demo stack.\n${processes
+      .map((processInfo) => processInfo.logs.join(""))
+      .join("\n")}`,
+  );
+};
+
+const formatSrtTime = (seconds) => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const wholeSeconds = Math.floor(seconds % 60);
+  const milliseconds = Math.round((seconds - Math.floor(seconds)) * 1000);
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(
+    wholeSeconds,
+  ).padStart(2, "0")},${String(milliseconds).padStart(3, "0")}`;
+};
+
+const buildSrt = () => {
+  let cursor = 0;
+
+  return segments
+    .map((segment, index) => {
+      const start = cursor;
+      cursor += segment.duration;
+      return `${index + 1}\n${formatSrtTime(start)} --> ${formatSrtTime(cursor)}\n${
+        segment.voiceover
+      }\n`;
+    })
+    .join("\n");
+};
+
+const shortHash = (hash, prefix = 14, suffix = 8) =>
+  `${hash.slice(0, prefix)}...${hash.slice(-suffix)}`;
+
+const installCaptionOverlay = async (page) => {
+  await page.addStyleTag({
+    content: `
+      #demo-caption {
+        position: fixed;
+        left: 32px;
+        right: 32px;
+        bottom: 24px;
+        z-index: 99999;
+        border: 1px solid rgba(215, 223, 217, 0.9);
+        border-radius: 8px;
+        background: rgba(19, 32, 27, 0.94);
+        color: #e5fff3;
+        font: 700 22px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 14px 18px;
+        box-shadow: 0 18px 44px rgba(41, 52, 47, 0.18);
+      }
+      body.proof-scene-active #demo-caption {
+        left: auto;
+        right: 48px;
+        top: 28px;
+        bottom: auto;
+        width: 420px;
+        font-size: 18px;
+        padding: 12px 14px;
+      }
+    `,
+  });
+};
+
+const caption = async (page, text) => {
   await page.evaluate((captionText) => {
     let element = document.getElementById("demo-caption");
 
@@ -57,61 +258,343 @@ const caption = async (text) => {
   }, text);
 };
 
-await caption("AgentPay Firewall: a policy wallet for AI agents using x402 payment flows.");
-await pause(4500);
+const step = async (page, segmentIndex, action) => {
+  const segment = segments[segmentIndex];
+  await caption(page, segment.caption);
+  const startedAt = Date.now();
 
-await caption("Users define the mandate: per-request cap, daily budget, approval threshold, and allowed services.");
-await pause(5000);
+  if (action) await action();
 
-await caption("Allowed flow: the agent requests a paid wallet-risk API.");
-await page.getByRole("button", { name: /Allowed paid API/ }).click();
-await pause(2200);
+  const remaining = segment.duration * 1_000 - (Date.now() - startedAt);
+  if (remaining > 0) await pause(remaining);
+};
 
-await caption("The resource returns HTTP 402 with PAYMENT-REQUIRED. The wallet evaluates policy before signing.");
-await page.getByRole("button", { name: "Run x402 flow" }).click();
-await page.locator(".status-card", { hasText: "Payment settled" }).waitFor({ timeout: 8000 });
-await pause(3500);
+const showProofScene = async (page, evidence) => {
+  const proof = {
+    status: evidence.status,
+    amount: `${evidence.amountUsd} USDC`,
+    network: evidence.networkName,
+    payer: shortHash(evidence.payer, 12, 8),
+    payTo: shortHash(evidence.payTo, 12, 8),
+    tx: shortHash(evidence.transactionHash, 16, 10),
+    txFull: evidence.transactionHash,
+    block: String(evidence.blockNumber),
+    explorerUrl: evidence.explorerUrl,
+  };
 
-await caption("Policy passed, so the wallet created PAYMENT-SIGNATURE and received PAYMENT-RESPONSE.");
-await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
-await pause(7000);
+  await page.evaluate((proofData) => {
+    document.getElementById("proof-scene")?.remove();
+    document.body.classList.add("proof-scene-active");
 
-await caption("Blocked flow: the agent tries to buy a costly non-allowlisted data crawl.");
-await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-await pause(1200);
-await page.getByRole("button", { name: /Blocked overspend/ }).click();
-await pause(2500);
+    const scene = document.createElement("section");
+    scene.id = "proof-scene";
+    scene.innerHTML = `
+      <div class="proof-shell">
+        <div class="proof-copy">
+          <span class="proof-eyebrow">Official x402 + OKX Wallet proof</span>
+          <h1>Real settlement, not a mock receipt</h1>
+          <p>The buyer signed x402 EIP-712 typed data in OKX Wallet. The facilitator settled the request and returned an official receipt.</p>
+        </div>
+        <div class="proof-grid">
+          <div class="proof-card"><span>Status</span><strong></strong></div>
+          <div class="proof-card"><span>Amount</span><strong></strong></div>
+          <div class="proof-card"><span>Network</span><strong></strong></div>
+          <div class="proof-card"><span>Block</span><strong></strong></div>
+        </div>
+        <div class="proof-route">
+          <div><span>Payer</span><code></code></div>
+          <div class="proof-arrow">-></div>
+          <div><span>Pay to</span><code></code></div>
+        </div>
+        <div class="proof-tx">
+          <span>Explorer transaction</span>
+          <code></code>
+          <small></small>
+        </div>
+      </div>
+    `;
 
-await caption("The wallet still sees the x402 challenge, but blocks before signing.");
-await page.getByRole("button", { name: "Run x402 flow" }).click();
-await page.locator(".status-card", { hasText: "Blocked before signing" }).waitFor({ timeout: 8000 });
-await pause(4500);
+    const style = document.createElement("style");
+    style.textContent = `
+      #proof-scene {
+        position: fixed;
+        inset: 0;
+        z-index: 99998;
+        padding: 48px 56px 120px;
+        box-sizing: border-box;
+        color: #f4fff8;
+        background:
+          radial-gradient(circle at 18% 16%, rgba(47, 83, 255, 0.32), transparent 34%),
+          radial-gradient(circle at 82% 28%, rgba(26, 177, 106, 0.24), transparent 36%),
+          linear-gradient(135deg, #101616 0%, #17231f 48%, #eef4ed 100%);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      #proof-scene .proof-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        height: 100%;
+      }
+      #proof-scene .proof-copy {
+        max-width: 760px;
+      }
+      #proof-scene .proof-eyebrow {
+        display: inline-flex;
+        margin-bottom: 14px;
+        color: #a4ffcf;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+      #proof-scene h1 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 54px;
+        line-height: 1.02;
+        letter-spacing: 0;
+      }
+      #proof-scene p {
+        margin: 18px 0 0;
+        max-width: 700px;
+        color: rgba(244, 255, 248, 0.86);
+        font-size: 24px;
+        line-height: 1.35;
+      }
+      #proof-scene .proof-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+      }
+      #proof-scene .proof-card,
+      #proof-scene .proof-route,
+      #proof-scene .proof-tx {
+        border: 1px solid rgba(232, 244, 237, 0.58);
+        border-radius: 8px;
+        background: rgba(15, 28, 23, 0.76);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+      }
+      #proof-scene .proof-card {
+        padding: 22px;
+      }
+      #proof-scene span {
+        color: rgba(229, 255, 243, 0.72);
+        font-size: 18px;
+        font-weight: 700;
+      }
+      #proof-scene strong {
+        display: block;
+        margin-top: 10px;
+        color: #ffffff;
+        font-size: 28px;
+        line-height: 1.05;
+      }
+      #proof-scene code {
+        color: #dfffea;
+        font: 700 26px/1.2 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        word-break: break-all;
+      }
+      #proof-scene .proof-route {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 24px;
+        align-items: center;
+        padding: 24px;
+      }
+      #proof-scene .proof-route span,
+      #proof-scene .proof-route code {
+        display: block;
+      }
+      #proof-scene .proof-arrow {
+        color: #a4ffcf;
+        font-size: 40px;
+        font-weight: 900;
+      }
+      #proof-scene .proof-tx {
+        margin-top: auto;
+        padding: 24px;
+      }
+      #proof-scene .proof-tx span,
+      #proof-scene .proof-tx code,
+      #proof-scene .proof-tx small {
+        display: block;
+      }
+      #proof-scene .proof-tx code {
+        margin-top: 10px;
+      }
+      #proof-scene .proof-tx small {
+        margin-top: 8px;
+        color: rgba(229, 255, 243, 0.68);
+        font-size: 18px;
+      }
+    `;
+    scene.appendChild(style);
+    document.body.appendChild(scene);
 
-await caption("No PAYMENT-SIGNATURE is generated. The audit log records exactly why it was blocked.");
-await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
-await pause(6500);
+    const cards = scene.querySelectorAll(".proof-card strong");
+    cards[0].textContent = proofData.status;
+    cards[1].textContent = proofData.amount;
+    cards[2].textContent = proofData.network;
+    cards[3].textContent = proofData.block;
+    scene.querySelector(".proof-route div:first-child code").textContent = proofData.payer;
+    scene.querySelector(".proof-route div:last-child code").textContent = proofData.payTo;
+    scene.querySelector(".proof-tx code").textContent = proofData.tx;
+    scene.querySelector(".proof-tx small").textContent = proofData.explorerUrl;
+  }, proof);
+};
 
-await caption("Manual review flow: allowed service, but the amount crosses the human approval threshold.");
-await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-await pause(1200);
-await page.getByRole("button", { name: /Manual review/ }).click();
-await pause(2400);
+const recordBrowserDemo = async (evidence) => {
+  const cleanup = await ensureLocalStack();
+  let browser;
 
-await caption("The policy engine routes this request to a human instead of silently signing.");
-await page.getByRole("button", { name: "Run x402 flow" }).click();
-await page.locator(".status-card", { hasText: "Waiting for human approval" }).waitFor({ timeout: 8000 });
-await pause(5200);
+  try {
+    browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      deviceScaleFactor: 1,
+      recordVideo: {
+        dir: tempDir,
+        size: { width: 1280, height: 720 },
+      },
+    });
 
-await caption("AgentPay Firewall makes autonomous payments useful, constrained, and auditable.");
-await pause(5200);
+    const page = await context.newPage();
 
-const video = page.video();
-await context.close();
-await browser.close();
+    await page.goto(appUrl, { waitUntil: "networkidle" });
+    await installCaptionOverlay(page);
 
-if (!video) {
-  throw new Error("Playwright video recording was not created.");
+    await step(page, 0);
+    await step(page, 1);
+    await step(page, 2);
+
+    await step(page, 3, async () => {
+      await page.getByRole("button", { name: /Allowed paid API/ }).click();
+      await page.getByRole("button", { name: "Run x402 flow" }).click();
+      await page.locator(".status-card", { hasText: "Payment settled" }).waitFor({
+        timeout: 10_000,
+      });
+    });
+
+    await step(page, 4, async () => {
+      await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
+      await pause(1_500);
+    });
+
+    await step(page, 5, async () => {
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      await pause(900);
+      await page.getByRole("button", { name: /Blocked overspend/ }).click();
+      await page.getByRole("button", { name: "Run x402 flow" }).click();
+      await page.locator(".status-card", { hasText: "Blocked before signing" }).waitFor({
+        timeout: 10_000,
+      });
+    });
+
+    await step(page, 6, async () => {
+      await page.getByRole("button", { name: /Manual review/ }).click();
+      await page.getByRole("button", { name: "Run x402 flow" }).click();
+      await page.locator(".status-card", { hasText: "Waiting for human approval" }).waitFor({
+        timeout: 10_000,
+      });
+    });
+
+    await step(page, 7, async () => {
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      await pause(1_500);
+    });
+
+    await step(page, 8, async () => {
+      await showProofScene(page, evidence);
+    });
+
+    await step(page, 9);
+
+    const video = page.video();
+    await context.close();
+
+    if (!video) {
+      throw new Error("Playwright video recording was not created.");
+    }
+
+    await copyFile(await video.path(), rawWebm);
+  } finally {
+    await browser?.close();
+    cleanup();
+  }
+};
+
+await rm(tempDir, { recursive: true, force: true });
+await mkdir(tempDir, { recursive: true });
+await mkdir(outputDir, { recursive: true });
+await mkdir(publicDir, { recursive: true });
+
+const evidence = JSON.parse(await readFile(evidenceFile, "utf8"));
+await writeFile(voiceoverFile, `${segments.map((segment) => segment.voiceover).join("\n\n")}\n`);
+await writeFile(docsSrt, buildSrt());
+await copyFile(docsSrt, publicSrt);
+
+await recordBrowserDemo(evidence);
+
+try {
+  await run("say", ["-v", "Samantha", "-r", "170", "-f", voiceoverFile, "-o", voiceoverAudio]);
+} catch {
+  await run("say", ["-r", "170", "-f", voiceoverFile, "-o", voiceoverAudio]);
 }
 
-await copyFile(await video.path(), finalWebm);
-console.log(finalWebm);
+await run("ffmpeg", [
+  "-y",
+  "-i",
+  rawWebm,
+  "-i",
+  voiceoverAudio,
+  "-vf",
+  "fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,tpad=stop_mode=clone:stop_duration=20",
+  "-map",
+  "0:v:0",
+  "-map",
+  "1:a:0",
+  "-shortest",
+  "-c:v",
+  "libx264",
+  "-pix_fmt",
+  "yuv420p",
+  "-preset",
+  "medium",
+  "-crf",
+  "18",
+  "-c:a",
+  "aac",
+  "-b:a",
+  "160k",
+  docsMp4,
+]);
+
+await run("ffmpeg", [
+  "-y",
+  "-i",
+  docsMp4,
+  "-c:v",
+  "libvpx-vp9",
+  "-crf",
+  "34",
+  "-b:v",
+  "0",
+  "-deadline",
+  "good",
+  "-cpu-used",
+  "4",
+  "-row-mt",
+  "1",
+  "-c:a",
+  "libopus",
+  "-b:a",
+  "96k",
+  docsWebm,
+]);
+
+await copyFile(docsMp4, publicMp4);
+await copyFile(docsWebm, publicWebm);
+
+console.log(`Wrote ${docsMp4}`);
+console.log(`Wrote ${docsWebm}`);
+console.log(`Wrote ${docsSrt}`);
