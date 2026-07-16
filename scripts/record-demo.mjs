@@ -12,6 +12,9 @@ const outputDir = resolve("docs/media");
 const publicDir = resolve("public");
 const tempDir = resolve("tmp/demo-video");
 const voiceoverDir = join(tempDir, "voiceover");
+const edgeTtsVenv = resolve("tmp/edge-tts-venv");
+const edgeTtsPython = join(edgeTtsVenv, "bin", "python");
+const edgeTtsVoice = process.env.DEMO_TTS_VOICE ?? "en-US-JennyNeural";
 
 const rawWebm = join(tempDir, "agentpay-firewall-demo.raw.webm");
 const voiceoverAudio = join(tempDir, "agentpay-firewall-demo.wav");
@@ -144,10 +147,65 @@ const probeDuration = async (filePath) => {
 
 const sayToFile = async (inputFile, outputFile) => {
   try {
-    await run("say", ["-v", "Samantha", "-r", "170", "-f", inputFile, "-o", outputFile]);
+    await run("say", ["-v", "Shelley (英语（美国）)", "-r", "165", "-f", inputFile, "-o", outputFile]);
   } catch {
-    await run("say", ["-r", "170", "-f", inputFile, "-o", outputFile]);
+    await run("say", ["-r", "165", "-f", inputFile, "-o", outputFile]);
   }
+};
+
+let edgeTtsReady;
+const ensureEdgeTts = async () => {
+  if (edgeTtsReady !== undefined) return edgeTtsReady;
+
+  const hasEdgeTts = async () => {
+    try {
+      await run(edgeTtsPython, ["-c", "import edge_tts"]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  if (await hasEdgeTts()) {
+    edgeTtsReady = true;
+    return edgeTtsReady;
+  }
+
+  try {
+    await mkdir(resolve("tmp"), { recursive: true });
+    await run("python3", ["-m", "venv", edgeTtsVenv]);
+    await run(edgeTtsPython, ["-m", "pip", "install", "edge-tts==7.2.8"]);
+    edgeTtsReady = await hasEdgeTts();
+  } catch {
+    edgeTtsReady = false;
+  }
+
+  return edgeTtsReady;
+};
+
+const synthesizeVoiceover = async ({ inputFile, edgeOutputFile, fallbackOutputFile }) => {
+  if (await ensureEdgeTts()) {
+    try {
+      await run(edgeTtsPython, [
+        "-m",
+        "edge_tts",
+        "--voice",
+        edgeTtsVoice,
+        "--rate",
+        "-2%",
+        "--file",
+        inputFile,
+        "--write-media",
+        edgeOutputFile,
+      ]);
+      return edgeOutputFile;
+    } catch (error) {
+      console.warn(`edge-tts failed, falling back to macOS say: ${error.message}`);
+    }
+  }
+
+  await sayToFile(inputFile, fallbackOutputFile);
+  return fallbackOutputFile;
 };
 
 const toConcatFilePath = (filePath) => filePath.replaceAll("'", "'\\''");
@@ -160,11 +218,16 @@ const prepareTimedVoiceover = async () => {
 
   for (const [index, segment] of segments.entries()) {
     const textPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.txt`);
-    const audioPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.aiff`);
+    const edgeAudioPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.mp3`);
+    const fallbackAudioPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.aiff`);
     const paddedPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.wav`);
 
     await writeFile(textPath, `${segment.voiceover}\n`);
-    await sayToFile(textPath, audioPath);
+    const audioPath = await synthesizeVoiceover({
+      inputFile: textPath,
+      edgeOutputFile: edgeAudioPath,
+      fallbackOutputFile: fallbackAudioPath,
+    });
 
     const audioDuration = await probeDuration(audioPath);
     const duration = Number(Math.max(segment.minDuration, audioDuration + 0.45).toFixed(3));
@@ -311,16 +374,17 @@ const installCaptionOverlay = async (page) => {
     content: `
       #demo-caption {
         position: fixed;
-        left: 32px;
+        left: 54px;
         right: 32px;
         bottom: 24px;
         z-index: 99999;
-        border: 1px solid rgba(215, 223, 217, 0.9);
+        border: 1px solid rgba(215, 223, 217, 0.76);
         border-radius: 8px;
-        background: rgba(19, 32, 27, 0.94);
+        background: rgba(14, 25, 21, 0.9);
         color: #e5fff3;
-        font: 700 22px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        padding: 14px 18px;
+        font: 700 21px/1.32 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 13px 16px;
+        text-align: center;
         box-shadow: 0 18px 44px rgba(41, 52, 47, 0.18);
       }
       body.proof-scene-active #demo-caption {
@@ -329,7 +393,8 @@ const installCaptionOverlay = async (page) => {
         top: 28px;
         bottom: auto;
         width: 420px;
-        font-size: 18px;
+        font-size: 15px;
+        text-align: left;
         padding: 12px 14px;
       }
     `,
@@ -352,7 +417,7 @@ const caption = async (page, text) => {
 
 const step = async (page, timedSegments, segmentIndex, action) => {
   const segment = timedSegments[segmentIndex];
-  await caption(page, segment.caption);
+  await caption(page, segment.voiceover);
   const startedAt = Date.now();
 
   if (action) await action();
@@ -643,6 +708,8 @@ await run("ffmpeg", [
   "0:v:0",
   "-map",
   "1:a:0",
+  "-af",
+  "loudnorm=I=-16:TP=-1.5:LRA=11",
   "-c:v",
   "libx264",
   "-pix_fmt",
