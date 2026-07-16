@@ -11,9 +11,11 @@ const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const outputDir = resolve("docs/media");
 const publicDir = resolve("public");
 const tempDir = resolve("tmp/demo-video");
+const voiceoverDir = join(tempDir, "voiceover");
 
 const rawWebm = join(tempDir, "agentpay-firewall-demo.raw.webm");
-const voiceoverAudio = join(tempDir, "agentpay-firewall-demo.aiff");
+const voiceoverAudio = join(tempDir, "agentpay-firewall-demo.wav");
+const voiceoverConcatList = join(tempDir, "voiceover-list.txt");
 const docsMp4 = join(outputDir, "agentpay-firewall-demo.mp4");
 const docsWebm = join(outputDir, "agentpay-firewall-demo.webm");
 const docsSrt = join(outputDir, "agentpay-firewall-demo.srt");
@@ -25,61 +27,61 @@ const evidenceFile = resolve("docs/x402-settlement-evidence.json");
 
 const segments = [
   {
-    duration: 5.8,
+    minDuration: 5.8,
     caption: "AgentPay Firewall: policy-controlled agent payments.",
     voiceover:
       "AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.",
   },
   {
-    duration: 7.0,
+    minDuration: 7.0,
     caption: "Agents can pay. Wallets still need rules.",
     voiceover:
       "AI agents can call paid APIs, but they should not spend from a wallet without rules, budgets, and audit trails.",
   },
   {
-    duration: 8.5,
+    minDuration: 8.5,
     caption: "Mandate: caps, budgets, allowlists, risk, approval.",
     voiceover:
       "The user defines the mandate: request cap, daily budget, approved services, network, asset, risk score, and human approval threshold.",
   },
   {
-    duration: 8.2,
+    minDuration: 8.2,
     caption: "Allowed flow: paid wallet-risk API returns HTTP 402.",
     voiceover:
       "First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 challenge with PAYMENT-REQUIRED.",
   },
   {
-    duration: 8.5,
+    minDuration: 8.5,
     caption: "Policy passed: sign, retry, receive PAYMENT-RESPONSE.",
     voiceover:
       "The firewall checks every gate. This request passes, so it signs, retries, and receives PAYMENT-RESPONSE.",
   },
   {
-    duration: 9.0,
+    minDuration: 9.0,
     caption: "Blocked flow: untrusted overspend stops before signing.",
     voiceover:
       "Now the unsafe path. A costly non-allowlisted crawl gets the same challenge, but policy fails before signing.",
   },
   {
-    duration: 8.0,
+    minDuration: 8.0,
     caption: "Manual review: allowed service, approval required.",
     voiceover:
       "A third request is allowed, but crosses the human approval threshold. The wallet pauses instead of silently spending.",
   },
   {
-    duration: 9.0,
+    minDuration: 9.0,
     caption: "Official path: OKX Wallet signs x402 typed data.",
     voiceover:
       "For the production path, the buyer key stays inside OKX Wallet. The app asks OKX to sign x402 typed data with eth_signTypedData_v4.",
   },
   {
-    duration: 11.5,
+    minDuration: 11.5,
     caption: "Verified settlement: 0.001 USDC on Base Sepolia.",
     voiceover:
       "We reproduced that path on Base Sepolia. The facilitator settled 0.001 USDC and returned an official x402 receipt with an explorer transaction.",
   },
   {
-    duration: 7.366,
+    minDuration: 7.4,
     caption: "Control layer for agentic payments.",
     voiceover:
       "So the project is not just another agent wallet. It is the control layer that decides when autonomous payments are safe to execute.",
@@ -119,6 +121,96 @@ const run = (command, args, options = {}) =>
       );
     });
   });
+
+const probeDuration = async (filePath) => {
+  const { stdout } = await run("ffprobe", [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration",
+    "-of",
+    "default=nw=1:nk=1",
+    filePath,
+  ]);
+
+  const duration = Number(stdout.trim());
+
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`Could not read audio duration for ${filePath}`);
+  }
+
+  return duration;
+};
+
+const sayToFile = async (inputFile, outputFile) => {
+  try {
+    await run("say", ["-v", "Samantha", "-r", "170", "-f", inputFile, "-o", outputFile]);
+  } catch {
+    await run("say", ["-r", "170", "-f", inputFile, "-o", outputFile]);
+  }
+};
+
+const toConcatFilePath = (filePath) => filePath.replaceAll("'", "'\\''");
+
+const prepareTimedVoiceover = async () => {
+  await mkdir(voiceoverDir, { recursive: true });
+  await writeFile(voiceoverFile, `${segments.map((segment) => segment.voiceover).join("\n\n")}\n`);
+
+  const timedSegments = [];
+
+  for (const [index, segment] of segments.entries()) {
+    const textPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.txt`);
+    const audioPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.aiff`);
+    const paddedPath = join(voiceoverDir, `segment-${String(index + 1).padStart(2, "0")}.wav`);
+
+    await writeFile(textPath, `${segment.voiceover}\n`);
+    await sayToFile(textPath, audioPath);
+
+    const audioDuration = await probeDuration(audioPath);
+    const duration = Number(Math.max(segment.minDuration, audioDuration + 0.45).toFixed(3));
+
+    await run("ffmpeg", [
+      "-y",
+      "-i",
+      audioPath,
+      "-af",
+      `apad=pad_dur=${Math.max(0, duration - audioDuration).toFixed(3)},atrim=0:${duration},asetpts=N/SR/TB`,
+      "-ar",
+      "44100",
+      "-ac",
+      "1",
+      paddedPath,
+    ]);
+
+    timedSegments.push({
+      ...segment,
+      duration,
+      audioDuration,
+      audioPath,
+      paddedPath,
+    });
+  }
+
+  await writeFile(
+    voiceoverConcatList,
+    `${timedSegments.map((segment) => `file '${toConcatFilePath(segment.paddedPath)}'`).join("\n")}\n`,
+  );
+
+  await run("ffmpeg", [
+    "-y",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    voiceoverConcatList,
+    "-c:a",
+    "pcm_s16le",
+    voiceoverAudio,
+  ]);
+
+  return timedSegments;
+};
 
 const reachable = async (url) => {
   try {
@@ -197,10 +289,10 @@ const formatSrtTime = (seconds) => {
   ).padStart(2, "0")},${String(milliseconds).padStart(3, "0")}`;
 };
 
-const buildSrt = () => {
+const buildSrt = (timedSegments) => {
   let cursor = 0;
 
-  return segments
+  return timedSegments
     .map((segment, index) => {
       const start = cursor;
       cursor += segment.duration;
@@ -258,8 +350,8 @@ const caption = async (page, text) => {
   }, text);
 };
 
-const step = async (page, segmentIndex, action) => {
-  const segment = segments[segmentIndex];
+const step = async (page, timedSegments, segmentIndex, action) => {
+  const segment = timedSegments[segmentIndex];
   await caption(page, segment.caption);
   const startedAt = Date.now();
 
@@ -443,7 +535,7 @@ const showProofScene = async (page, evidence) => {
   }, proof);
 };
 
-const recordBrowserDemo = async (evidence) => {
+const recordBrowserDemo = async (evidence, timedSegments) => {
   const cleanup = await ensureLocalStack();
   let browser;
 
@@ -463,11 +555,11 @@ const recordBrowserDemo = async (evidence) => {
     await page.goto(appUrl, { waitUntil: "networkidle" });
     await installCaptionOverlay(page);
 
-    await step(page, 0);
-    await step(page, 1);
-    await step(page, 2);
+    await step(page, timedSegments, 0);
+    await step(page, timedSegments, 1);
+    await step(page, timedSegments, 2);
 
-    await step(page, 3, async () => {
+    await step(page, timedSegments, 3, async () => {
       await page.getByRole("button", { name: /Allowed paid API/ }).click();
       await page.getByRole("button", { name: "Run x402 flow" }).click();
       await page.locator(".status-card", { hasText: "Payment settled" }).waitFor({
@@ -475,12 +567,12 @@ const recordBrowserDemo = async (evidence) => {
       });
     });
 
-    await step(page, 4, async () => {
+    await step(page, timedSegments, 4, async () => {
       await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
       await pause(1_500);
     });
 
-    await step(page, 5, async () => {
+    await step(page, timedSegments, 5, async () => {
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
       await pause(900);
       await page.getByRole("button", { name: /Blocked overspend/ }).click();
@@ -490,7 +582,7 @@ const recordBrowserDemo = async (evidence) => {
       });
     });
 
-    await step(page, 6, async () => {
+    await step(page, timedSegments, 6, async () => {
       await page.getByRole("button", { name: /Manual review/ }).click();
       await page.getByRole("button", { name: "Run x402 flow" }).click();
       await page.locator(".status-card", { hasText: "Waiting for human approval" }).waitFor({
@@ -498,16 +590,16 @@ const recordBrowserDemo = async (evidence) => {
       });
     });
 
-    await step(page, 7, async () => {
+    await step(page, timedSegments, 7, async () => {
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
       await pause(1_500);
     });
 
-    await step(page, 8, async () => {
+    await step(page, timedSegments, 8, async () => {
       await showProofScene(page, evidence);
     });
 
-    await step(page, 9);
+    await step(page, timedSegments, 9);
 
     const video = page.video();
     await context.close();
@@ -525,21 +617,17 @@ const recordBrowserDemo = async (evidence) => {
 
 await rm(tempDir, { recursive: true, force: true });
 await mkdir(tempDir, { recursive: true });
+await mkdir(voiceoverDir, { recursive: true });
 await mkdir(outputDir, { recursive: true });
 await mkdir(publicDir, { recursive: true });
 
 const evidence = JSON.parse(await readFile(evidenceFile, "utf8"));
-await writeFile(voiceoverFile, `${segments.map((segment) => segment.voiceover).join("\n\n")}\n`);
-await writeFile(docsSrt, buildSrt());
+const timedSegments = await prepareTimedVoiceover();
+const totalDuration = timedSegments.reduce((sum, segment) => sum + segment.duration, 0);
+await writeFile(docsSrt, buildSrt(timedSegments));
 await copyFile(docsSrt, publicSrt);
 
-await recordBrowserDemo(evidence);
-
-try {
-  await run("say", ["-v", "Samantha", "-r", "170", "-f", voiceoverFile, "-o", voiceoverAudio]);
-} catch {
-  await run("say", ["-r", "170", "-f", voiceoverFile, "-o", voiceoverAudio]);
-}
+await recordBrowserDemo(evidence, timedSegments);
 
 await run("ffmpeg", [
   "-y",
@@ -549,11 +637,12 @@ await run("ffmpeg", [
   voiceoverAudio,
   "-vf",
   "fps=30,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,tpad=stop_mode=clone:stop_duration=20",
+  "-t",
+  totalDuration.toFixed(3),
   "-map",
   "0:v:0",
   "-map",
   "1:a:0",
-  "-shortest",
   "-c:v",
   "libx264",
   "-pix_fmt",

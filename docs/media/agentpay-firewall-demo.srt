@@ -3,37 +3,37 @@
 AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.
 
 2
-00:00:05,800 --> 00:00:12,800
+00:00:05,800 --> 00:00:13,282
 AI agents can call paid APIs, but they should not spend from a wallet without rules, budgets, and audit trails.
 
 3
-00:00:12,800 --> 00:00:21,300
+00:00:13,282 --> 00:00:23,032
 The user defines the mandate: request cap, daily budget, approved services, network, asset, risk score, and human approval threshold.
 
 4
-00:00:21,300 --> 00:00:29,500
+00:00:23,032 --> 00:00:31,425
 First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 challenge with PAYMENT-REQUIRED.
 
 5
-00:00:29,500 --> 00:00:38,000
+00:00:31,425 --> 00:00:39,925
 The firewall checks every gate. This request passes, so it signs, retries, and receives PAYMENT-RESPONSE.
 
 6
-00:00:38,000 --> 00:00:47,000
+00:00:39,925 --> 00:00:48,925
 Now the unsafe path. A costly non-allowlisted crawl gets the same challenge, but policy fails before signing.
 
 7
-00:00:47,000 --> 00:00:55,000
+00:00:48,925 --> 00:00:56,925
 A third request is allowed, but crosses the human approval threshold. The wallet pauses instead of silently spending.
 
 8
-00:00:55,000 --> 00:01:04,000
+00:00:56,925 --> 00:01:06,978
 For the production path, the buyer key stays inside OKX Wallet. The app asks OKX to sign x402 typed data with eth_signTypedData_v4.
 
 9
-00:01:04,000 --> 00:01:15,500
+00:01:06,978 --> 00:01:18,478
 We reproduced that path on Base Sepolia. The facilitator settled 0.001 USDC and returned an official x402 receipt with an explorer transaction.
 
 10
-00:01:15,500 --> 00:01:22,866
+00:01:18,478 --> 00:01:26,315
 So the project is not just another agent wallet. It is the control layer that decides when autonomous payments are safe to execute.
