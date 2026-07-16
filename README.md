@@ -13,31 +13,6 @@ It demonstrates a policy wallet for AI agents:
 
 The public Vercel demo uses live `/api/paid/*` resource routes and a judge-safe demo signer/facilitator so judges can run the full Challenge -> Sign -> Retry -> Settle flow without funding a wallet. The repo also includes an official x402 SDK/facilitator harness and an OKX Wallet browser signer path.
 
-## OpenAI Build Week: Codex + GPT-5.6 Usage
-
-For OpenAI Build Week, this project is submitted under the name **AgentSpend Guard** in the **Developer Tools** category. The submission focuses on the same working product, framed as a developer safety layer for AI agents before they spend money, call paid APIs, or sign x402 payments.
-
-Codex and GPT-5.6 were used throughout the Build Week work to turn the idea into a runnable, testable developer tool:
-
-- shaped the product scope from "agentic wallet" into a policy firewall for agent spending
-- implemented and iterated on the TypeScript policy engine, including budget, allowlist, asset, network, risk, and approval checks
-- built the live HTTP `402 -> PAYMENT-REQUIRED -> PAYMENT-SIGNATURE -> retry -> PAYMENT-RESPONSE` flow
-- added Vercel serverless paid-resource routes so judges can test the project without running a local wallet setup
-- added official x402 SDK/facilitator integration paths and an OKX Wallet browser signer path for production-style settlement evidence
-- created automated tests and smoke checks for the policy engine, protocol flow, hosted API, and x402 readiness path
-- generated the demo video, voiceover script, captions, submission story, and architecture documentation
-
-The most important product decisions were made collaboratively with Codex: keeping the public demo deterministic and judge-safe, separating demo receipts from real facilitator receipts, documenting the production replacement points, and making the project understandable as a developer tool instead of only a Web3 wallet prototype.
-
-Relevant verification commands:
-
-```bash
-npm test
-npm run build
-npm run smoke
-npm run x402:ready
-```
-
 ## Live Links
 
 - Public demo: https://agentpay-firewall.vercel.app/
