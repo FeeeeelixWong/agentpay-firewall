@@ -8,7 +8,6 @@ const directApiHealthUrl = "http://127.0.0.1:8787/api/health";
 const proxiedApiHealthUrl = `${appUrl}/api/health`;
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
-const outputDir = resolve("docs/media");
 const publicDir = resolve("public");
 const tempDir = resolve("tmp/demo-video");
 const voiceoverDir = join(tempDir, "voiceover");
@@ -19,9 +18,6 @@ const edgeTtsVoice = process.env.DEMO_TTS_VOICE ?? "en-US-JennyNeural";
 const rawWebm = join(tempDir, "agentpay-firewall-demo.raw.webm");
 const voiceoverAudio = join(tempDir, "agentpay-firewall-demo.wav");
 const voiceoverConcatList = join(tempDir, "voiceover-list.txt");
-const docsMp4 = join(outputDir, "agentpay-firewall-demo.mp4");
-const docsWebm = join(outputDir, "agentpay-firewall-demo.webm");
-const docsSrt = join(outputDir, "agentpay-firewall-demo.srt");
 const publicMp4 = join(publicDir, "agentpay-firewall-demo.mp4");
 const publicWebm = join(publicDir, "agentpay-firewall-demo.webm");
 const publicSrt = join(publicDir, "agentpay-firewall-demo.srt");
@@ -683,14 +679,12 @@ const recordBrowserDemo = async (evidence, timedSegments) => {
 await rm(tempDir, { recursive: true, force: true });
 await mkdir(tempDir, { recursive: true });
 await mkdir(voiceoverDir, { recursive: true });
-await mkdir(outputDir, { recursive: true });
 await mkdir(publicDir, { recursive: true });
 
 const evidence = JSON.parse(await readFile(evidenceFile, "utf8"));
 const timedSegments = await prepareTimedVoiceover();
 const totalDuration = timedSegments.reduce((sum, segment) => sum + segment.duration, 0);
-await writeFile(docsSrt, buildSrt(timedSegments));
-await copyFile(docsSrt, publicSrt);
+await writeFile(publicSrt, buildSrt(timedSegments));
 
 await recordBrowserDemo(evidence, timedSegments);
 
@@ -722,13 +716,13 @@ await run("ffmpeg", [
   "aac",
   "-b:a",
   "160k",
-  docsMp4,
+  publicMp4,
 ]);
 
 await run("ffmpeg", [
   "-y",
   "-i",
-  docsMp4,
+  publicMp4,
   "-c:v",
   "libvpx-vp9",
   "-crf",
@@ -745,12 +739,9 @@ await run("ffmpeg", [
   "libopus",
   "-b:a",
   "96k",
-  docsWebm,
+  publicWebm,
 ]);
 
-await copyFile(docsMp4, publicMp4);
-await copyFile(docsWebm, publicWebm);
-
-console.log(`Wrote ${docsMp4}`);
-console.log(`Wrote ${docsWebm}`);
-console.log(`Wrote ${docsSrt}`);
+console.log(`Wrote ${publicMp4}`);
+console.log(`Wrote ${publicWebm}`);
+console.log(`Wrote ${publicSrt}`);

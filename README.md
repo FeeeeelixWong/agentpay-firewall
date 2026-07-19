@@ -1,6 +1,6 @@
 # AgentPay Firewall
 
-AgentPay Firewall is a hackathon MVP for the Brainwave 2026 X402 Blockchain Track.
+AgentPay Firewall is a hackathon MVP for the Brainwave 2026 X402 Blockchain Track and the payment-rail reference implementation behind [AgentSpend Guard](https://github.com/FeeeeelixWong/agent-spend-guard). It focuses on the x402 challenge, signature, retry, and settlement path; AgentSpend Guard builds the broader operator policy and explanation experience on top of that foundation.
 
 It demonstrates a policy wallet for AI agents:
 
@@ -63,6 +63,10 @@ The deployed Vercel demo includes serverless API routes under `api/`, so judges 
 AI agents need to pay for APIs, data, tools, and other agents. Raw signing power is too dangerous, and manual approval for every micropayment removes the value of agent autonomy.
 
 AgentPay Firewall inserts a policy layer between the agent and the x402 signer. The agent can act, but only inside a user-defined mandate.
+
+## Project Relationship
+
+This repository preserves the x402-focused hackathon implementation and its settlement evidence. For a broader, hosted product workflow with deterministic spending policy, manual review, and operator-ready explanations, see [AgentSpend Guard](https://github.com/FeeeeelixWong/agent-spend-guard).
 
 ## Screenshots
 
@@ -131,3 +135,7 @@ Pay to: 0x4a6aae28b27681856ae824af82fea87896ecc3ed
 Amount: 0.001 USDC
 Transaction: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).

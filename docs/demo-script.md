@@ -11,9 +11,6 @@ npm run record:demo
 
 The recording starts the local Vite app and local `/api/paid/*` resource server when they are not already running, then writes:
 
-- `docs/media/agentpay-firewall-demo.mp4`
-- `docs/media/agentpay-firewall-demo.webm`
-- `docs/media/agentpay-firewall-demo.srt`
 - `public/agentpay-firewall-demo.mp4`
 - `public/agentpay-firewall-demo.webm`
 - `public/agentpay-firewall-demo.srt`

@@ -3,6 +3,9 @@ dist/
 .playwright-cli/
 output/
 tmp/
+docs/media/*.mp4
+docs/media/*.webm
+docs/media/*.srt
 *.log
 .env
 .env.local
