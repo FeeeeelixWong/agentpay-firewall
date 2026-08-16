@@ -36,6 +36,7 @@ import {
 } from "./lib/policy";
 import { scenarios, type ScenarioId } from "./lib/scenarios";
 import {
+  ALGORAND_TESTNET_NETWORK,
   GOPLAUSIBLE_FACILITATOR_URL,
   HOSTED_ALGORAND_X402_RESOURCE_URL,
   VERIFIED_ALGORAND_SETTLEMENT_URL,
@@ -128,6 +129,11 @@ const formatCurrency = (amount: number) =>
     minimumFractionDigits: amount > 0 && amount < 0.01 ? 3 : 2,
     maximumFractionDigits: amount > 0 && amount < 0.01 ? 6 : 2,
   }).format(amount);
+
+const formatPolicyCheckDetail = (label: string, detail: string) =>
+  label === "Network" && detail === ALGORAND_TESTNET_NETWORK
+    ? "Algorand Testnet"
+    : detail;
 
 const now = () =>
   new Intl.DateTimeFormat("en-US", {
@@ -837,7 +843,9 @@ function App() {
                 {result.decision.checks.map((check) => (
                   <li key={check.label} className={check.status}>
                     <span>{check.label}</span>
-                    <strong>{check.detail}</strong>
+                    <strong title={check.detail}>
+                      {formatPolicyCheckDetail(check.label, check.detail)}
+                    </strong>
                   </li>
                 ))}
               </ul>

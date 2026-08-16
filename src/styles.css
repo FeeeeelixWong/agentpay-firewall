@@ -291,7 +291,8 @@ h2 {
 }
 
 .details-grid {
-  grid-template-columns: minmax(420px, 1.2fr) repeat(3, minmax(260px, 1fr));
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: stretch;
   margin-top: 16px;
 }
 
@@ -309,6 +310,10 @@ h2 {
   align-items: flex-start;
   gap: 10px;
   margin-bottom: 18px;
+}
+
+.section-heading > div {
+  min-width: 0;
 }
 
 .section-heading svg {
@@ -757,7 +762,17 @@ h2 {
 
 .decision-content {
   display: grid;
+  min-width: 0;
   gap: 12px;
+}
+
+.decision-banner {
+  min-width: 0;
+}
+
+.decision-banner span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .decision-banner.approved {
@@ -785,8 +800,9 @@ h2 {
 }
 
 .check-list li {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
   gap: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -810,8 +826,15 @@ h2 {
   color: var(--muted);
 }
 
+.check-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .receipt-content {
   display: grid;
+  min-width: 0;
   gap: 14px;
 }
 
@@ -842,6 +865,7 @@ dl {
 
 dl div {
   display: grid;
+  min-width: 0;
   gap: 4px;
 }
 
@@ -852,6 +876,7 @@ dt {
 }
 
 dd {
+  min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 13px;
@@ -870,7 +895,7 @@ dd {
 
 .audit-list li {
   display: grid;
-  grid-template-columns: 74px 1fr;
+  grid-template-columns: 84px minmax(0, 1fr);
   gap: 10px;
   border-left: 3px solid var(--border-strong);
   padding: 2px 0 10px 10px;
@@ -892,17 +917,24 @@ dd {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.audit-list li > div {
+  min-width: 0;
 }
 
 .audit-list strong {
   display: block;
   margin-bottom: 3px;
+  overflow-wrap: anywhere;
   font-size: 13px;
 }
 
 .audit-list p {
   margin-bottom: 0;
   color: var(--muted);
+  overflow-wrap: anywhere;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -960,14 +992,18 @@ dd {
     grid-template-columns: minmax(0, 1fr) 280px;
   }
 
-  .workspace-grid,
-  .details-grid {
+  .workspace-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .flow-panel,
-  .transcript-panel {
+  .flow-panel {
     grid-column: span 2;
+  }
+}
+
+@media (max-width: 900px) {
+  .details-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1008,9 +1044,17 @@ dd {
     grid-template-columns: 1fr;
   }
 
-  .stage-title,
-  .check-list li {
+  .stage-title {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .check-list li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .check-list strong {
+    text-align: left;
   }
 }
