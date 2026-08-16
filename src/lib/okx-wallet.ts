@@ -112,7 +112,7 @@ const isLocalhostUrl = (url: URL) =>
   ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
 
 const localX402Help =
-  "For the default local resource, run `X402_PAY_TO=0x4a6aae28b27681856ae824af82fea87896ecc3ed npm run dev:x402` and open the app from `http://127.0.0.1:5176` with `npm run dev:web`.";
+  "For the default Algorand resource, run `ALGORAND_PAY_TO=<testnet-address> npm run dev:x402` and open the app from `http://127.0.0.1:5176` with `npm run dev:web`.";
 
 const getOkxProvider = (): Eip1193Provider => {
   const candidateWindow = window as OkxWindow;

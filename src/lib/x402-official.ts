@@ -4,7 +4,7 @@ export const X402_TESTNET_FACILITATOR_URL = "https://x402.org/facilitator";
 export const X402_CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
 export const DEFAULT_X402_PAY_TO = "0x4a6aae28b27681856ae824af82fea87896ecc3ed";
 export const HOSTED_X402_RESOURCE_URL =
-  "https://agentpay-firewall.vercel.app/api/x402/official";
+  "https://agentpay-firewall.vercel.app/api/x402/base";
 
 export type OfficialX402Mode = "testnet" | "mainnet";
 

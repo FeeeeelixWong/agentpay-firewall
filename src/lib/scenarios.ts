@@ -31,10 +31,10 @@ export const scenarios: Record<ScenarioId, Scenario> = {
     intent: "Research agent needs one wallet-risk label before answering a user.",
     resourcePath: "/api/paid/allowed-risk-scan",
     requirement: makeRequirement("allowed-risk-scan", {
-      network: "eip155:8453",
+      network: "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
       asset: "USDC",
       amountUsd: 0.08,
-      payTo: "0xF1reWa11000000000000000000000000000000402",
+      payTo: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
       resource: "https://risklabel.ai/api/wallet-score?address=demo",
       serviceName: "risklabel.ai",
       description: "Wallet risk score API call",

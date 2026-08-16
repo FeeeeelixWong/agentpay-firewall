@@ -19,7 +19,7 @@ describe("official x402 configuration", () => {
 
   it("publishes an HTTPS judge-facing resource URL", () => {
     expect(HOSTED_X402_RESOURCE_URL).toMatch(/^https:\/\//);
-    expect(HOSTED_X402_RESOURCE_URL).toContain("/api/x402/official");
+    expect(HOSTED_X402_RESOURCE_URL).toContain("/api/x402/base");
   });
 
   it("accepts explicit production overrides", () => {

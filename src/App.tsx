@@ -15,6 +15,7 @@ import {
   WalletCards,
   XCircle,
 } from "lucide-react";
+import { useWallet } from "@txnlab/use-wallet-react";
 import { useMemo, useState } from "react";
 import {
   createSettlementResponse,
@@ -34,7 +35,11 @@ import {
   type PolicyDecision,
 } from "./lib/policy";
 import { scenarios, type ScenarioId } from "./lib/scenarios";
-import { HOSTED_X402_RESOURCE_URL } from "./lib/x402-official";
+import {
+  ALGORAND_TESTNET_LORA_URL,
+  GOPLAUSIBLE_FACILITATOR_URL,
+  HOSTED_ALGORAND_X402_RESOURCE_URL,
+} from "./lib/x402-algorand";
 
 type StageState = "pending" | "active" | "done" | "blocked" | "error" | "review";
 
@@ -62,7 +67,7 @@ type RunResult = {
   paymentRequiredHeader?: string;
   paymentSignatureHeader?: string;
   paymentResponseHeader?: string;
-  transport?: "server" | "browser-sim" | "official-challenge" | "okx-wallet";
+  transport?: "server" | "browser-sim" | "official-challenge" | "algorand-wallet";
 };
 
 const initialStages: FlowStage[] = [
@@ -143,10 +148,11 @@ const resetFrom = (stages: FlowStage[], activeId: string) => {
 };
 
 const defaultOfficialX402TargetUrl =
-  (import.meta as ImportMeta & { env?: { VITE_X402_TARGET_URL?: string } }).env
-    ?.VITE_X402_TARGET_URL ?? HOSTED_X402_RESOURCE_URL;
+  (import.meta as ImportMeta & { env?: { VITE_ALGORAND_X402_TARGET_URL?: string } }).env
+    ?.VITE_ALGORAND_X402_TARGET_URL ?? HOSTED_ALGORAND_X402_RESOURCE_URL;
 
 function App() {
+  const { activeAddress, availableWallets, signTransactions } = useWallet();
   const [policy, setPolicy] = useState<AgentPolicy>(defaultPolicy);
   const [stages, setStages] = useState<FlowStage[]>(initialStages);
   const [activeScenario, setActiveScenario] = useState<ScenarioId>("allowed-risk-scan");
@@ -154,7 +160,6 @@ function App() {
   const [auditLog, setAuditLog] = useState<AuditEvent[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [okxAddress, setOkxAddress] = useState<string | null>(null);
   const officialTargetUrl = defaultOfficialX402TargetUrl;
 
   const selectedScenario = scenarios[activeScenario];
@@ -169,7 +174,7 @@ function App() {
     if (review) return "Waiting for human approval";
     if (completed === stages.length) return "Payment settled";
     if (result.transport === "official-challenge" && completed >= 2) {
-      return "Official x402 verified";
+      return "Algorand x402 verified";
     }
     if (isRunning) return "Running x402 flow";
     return "Ready";
@@ -396,7 +401,37 @@ function App() {
     }
   };
 
-  const runOkxWalletPayment = async () => {
+  const connectPeraWallet = async () => {
+    const peraWallet = availableWallets.find((wallet) => wallet.id === "pera");
+
+    if (!peraWallet) {
+      setError("Pera Wallet is not available in this browser.");
+      return;
+    }
+
+    setError(null);
+    setIsRunning(true);
+    try {
+      await peraWallet.connect();
+      addAuditEvent({
+        title: "Pera Wallet connected",
+        detail: "Algorand Testnet wallet session is ready for policy-gated x402 signing.",
+        status: "info",
+      });
+    } catch (connectError) {
+      const message = connectError instanceof Error ? connectError.message : "Wallet connection failed";
+      setError(message);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const runAlgorandWalletPayment = async () => {
+    if (!activeAddress) {
+      await connectPeraWallet();
+      return;
+    }
+
     setActiveScenario("allowed-risk-scan");
     setError(null);
     setResult({});
@@ -404,17 +439,15 @@ function App() {
     setIsRunning(true);
 
     try {
-      const targetUrl = officialTargetUrl.trim();
-      const { fetchOfficialX402Challenge, payOfficialX402WithOkx } = await import(
-        "./lib/okx-wallet"
-      );
+      const { fetchOfficialX402Challenge } = await import("./lib/okx-wallet");
+      const { payOfficialX402WithAlgorandWallet } = await import("./lib/algorand-wallet");
 
       setStages((current) => updateStage(current, "challenge", "active"));
-      const challenge = await fetchOfficialX402Challenge(targetUrl);
+      const challenge = await fetchOfficialX402Challenge(officialTargetUrl);
       setResult({
         requirement: challenge.requirement,
         paymentRequiredHeader: challenge.header,
-        transport: "okx-wallet",
+        transport: "algorand-wallet",
       });
       setStages((current) => updateStage(current, "challenge", "done"));
 
@@ -422,40 +455,30 @@ function App() {
       const decision = evaluatePayment(challenge.requirement, policy);
       setResult((current) => ({ ...current, decision }));
 
-      if (decision.status === "blocked") {
-        setStages((current) =>
-          resetFrom(updateStage(updateStage(current, "policy", "blocked"), "sign", "blocked"), "sign"),
-        );
+      if (decision.status !== "approved") {
+        const state = decision.status === "blocked" ? "blocked" : "review";
+        setStages((current) => updateStage(current, "policy", state));
         addAuditEvent({
-          title: "OKX payment blocked",
-          detail: `${challenge.requirement.serviceName} requested ${formatCurrency(challenge.requirement.amountUsd)}. ${decision.reason}`,
-          status: "blocked",
-        });
-        return;
-      }
-
-      if (decision.status === "manual_review") {
-        setStages((current) =>
-          resetFrom(updateStage(updateStage(current, "policy", "review"), "sign", "review"), "sign"),
-        );
-        addAuditEvent({
-          title: "OKX payment needs review",
-          detail: `${challenge.requirement.serviceName} requested ${formatCurrency(challenge.requirement.amountUsd)}. ${decision.reason}`,
-          status: "review",
+          title: "Algorand payment not signed",
+          detail: decision.reason,
+          status: decision.status === "blocked" ? "blocked" : "review",
         });
         return;
       }
 
       setStages((current) => updateStage(current, "policy", "done"));
       setStages((current) => updateStage(current, "sign", "active"));
-      const paid = await payOfficialX402WithOkx({ targetUrl, challenge });
-      setOkxAddress(paid.address);
+      const paid = await payOfficialX402WithAlgorandWallet({
+        targetUrl: officialTargetUrl,
+        address: activeAddress,
+        signTransactions,
+        amountUsd: challenge.requirement.amountUsd,
+      });
       setStages((current) => updateStage(current, "sign", "done"));
       setStages((current) => updateStage(current, "retry", "done"));
       setStages((current) => updateStage(current, "settle", "done"));
       setResult((current) => ({
         ...current,
-        paymentSignatureHeader: paid.paymentSignatureHeader,
         paymentResponseHeader: paid.paymentResponseHeader,
         settlement: paid.settlement,
         apiResult: paid.apiResult,
@@ -465,19 +488,19 @@ function App() {
         spentTodayUsd: Number((current.spentTodayUsd + challenge.requirement.amountUsd).toFixed(3)),
       }));
       addAuditEvent({
-        title: "OKX Wallet payment settled",
-        detail: `${paid.address} settled ${formatCurrency(challenge.requirement.amountUsd)} with official x402 receipt ${shortHash(paid.settlement.txHash)}.${paid.networkNotice ? ` ${paid.networkNotice}` : ""}`,
+        title: "Algorand x402 payment settled",
+        detail: `${shortHash(activeAddress, 10, 6)} paid ${formatCurrency(challenge.requirement.amountUsd)} through GoPlausible. Transaction: ${shortHash(paid.settlement.txHash)}.`,
         status: "settled",
       });
-    } catch (runError) {
-      const message = runError instanceof Error ? runError.message : "Unknown OKX wallet flow error";
+    } catch (paymentError) {
+      const message = paymentError instanceof Error ? paymentError.message : "Algorand payment failed";
       setError(message);
       setStages((current) => {
         const active = current.find((stage) => stage.state === "active");
         return active ? updateStage(current, active.id, "error") : current;
       });
       addAuditEvent({
-        title: "OKX payment failed",
+        title: "Algorand x402 payment failed",
         detail: message,
         status: "blocked",
       });
@@ -493,14 +516,13 @@ function App() {
     setAuditLog([]);
     setError(null);
     setActiveScenario("allowed-risk-scan");
-    setOkxAddress(null);
   };
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Brainwave 2026 · direct x402 integration</p>
+          <p className="eyebrow">Brainwave 2026 · Algorand x402 final build</p>
           <h1>AgentPay Firewall</h1>
           <p className="lede">
             Give AI agents a payment mandate, not unlimited wallet access. Every x402 request is
@@ -521,14 +543,14 @@ function App() {
           </div>
           <h2>Verify the protocol before testing the policy</h2>
           <p>
-            The hosted resource is protected by <code>@x402/express</code> and the x402.org
-            facilitator. It returns a standard v2 challenge, accepts an exact USDC payment, and
-            settles on Base Sepolia.
+            The hosted resource uses <code>@x402/express</code> and <code>@x402/avm</code>. It
+            returns a standard v2 challenge, accepts exact USDC on Algorand Testnet, and routes
+            verification and settlement through GoPlausible.
           </p>
           <div className="proof-meta" aria-label="Official x402 configuration">
             <span>x402 v2</span>
-            <span>Exact scheme</span>
-            <span>Base Sepolia</span>
+            <span>Exact AVM</span>
+            <span>Algorand Testnet</span>
             <span>0.001 USDC</span>
           </div>
           <a
@@ -555,23 +577,25 @@ function App() {
           <button
             type="button"
             className="proof-secondary"
-            onClick={runOkxWalletPayment}
+            onClick={runAlgorandWalletPayment}
             disabled={isRunning}
           >
             <WalletCards aria-hidden="true" />
-            Pay with OKX Wallet
+            {activeAddress ? "Pay 0.001 USDC" : "Connect Pera Wallet"}
           </button>
           <a
             className="proof-receipt-link"
-            href="https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da"
+            href={ALGORAND_TESTNET_LORA_URL}
             target="_blank"
             rel="noreferrer"
           >
             <ExternalLink aria-hidden="true" />
-            View verified settlement
+            Inspect Algorand Testnet
           </a>
           <p className="proof-wallet-status">
-            {okxAddress ? `Connected: ${shortHash(okxAddress, 10, 6)}` : "No wallet needed to verify the challenge."}
+            {activeAddress
+              ? `Pera Testnet: ${shortHash(activeAddress, 10, 6)}`
+              : `Payments settle through ${new URL(GOPLAUSIBLE_FACILITATOR_URL).hostname}.`}
           </p>
         </div>
       </section>

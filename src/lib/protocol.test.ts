@@ -45,6 +45,12 @@ describe("x402 protocol helpers", () => {
     expect(buildExplorerUrl("eip155:84532", "0xabc")).toBe(
       "https://sepolia.basescan.org/tx/0xabc",
     );
+    expect(
+      buildExplorerUrl(
+        "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+        "ALGO_TX",
+      ),
+    ).toBe("https://lora.algokit.io/testnet/transaction/ALGO_TX");
     expect(buildExplorerUrl("solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1", "sig")).toBe(
       "https://solscan.io/tx/sig?cluster=devnet",
     );

@@ -30,7 +30,7 @@
     <main>
       <header>
         <h1>AgentPay Firewall</h1>
-        <p>Brainwave 2026 x402 integration correction</p>
+        <p>Brainwave 2026 Algorand x402 final-round correction</p>
       </header>
 
       <section>
@@ -47,7 +47,7 @@
 
       <section>
         <p class="label">Correction implemented</p>
-        <p class="value">AgentPay Firewall now directly integrates official x402 middleware in its public Vercel deployment. The protected endpoint at https://agentpay-firewall.vercel.app/api/x402/official uses @x402/express paymentMiddleware, @x402/core facilitator infrastructure, and the @x402/evm exact scheme. An unpaid GET returns HTTP 402 with a standards-compliant x402 v2 PAYMENT-REQUIRED header for 0.001 USDC on Base Sepolia. A valid PAYMENT-SIGNATURE is verified and settled through the x402.org facilitator before the resource is returned with PAYMENT-RESPONSE.</p>
+        <p class="value">AgentPay Firewall now directly implements x402 on Algorand Testnet. The protected endpoint at https://agentpay-firewall.vercel.app/api/x402/official uses @x402/express paymentMiddleware, @x402/core facilitator infrastructure, and the @x402/avm exact scheme. An unpaid GET returns HTTP 402 with an x402 v2 PAYMENT-REQUIRED challenge for 0.001 USDC using Testnet ASA 10458941. Payment verification and settlement are routed through the GoPlausible facilitator.</p>
         <button type="button">Copy</button>
       </section>
 
@@ -56,15 +56,15 @@
         <p class="value">1. Open https://agentpay-firewall.vercel.app/.
 2. Click "Verify official 402" in the first panel.
 3. Confirm the status changes to "Official x402 verified".
-4. Review the decoded x402 v2, exact, Base Sepolia, and 0.001 USDC challenge.
-5. Run npm run smoke:x402 from the repository for an automated hosted verification.</p>
+4. Review x402 v2, exact, Algorand Testnet, USDC ASA 10458941, and 0.001 USDC.
+5. Connect Pera Wallet on Testnet for the buyer flow.
+6. Run npm run smoke:x402 from the repository for automated hosted verification.</p>
         <button type="button">Copy</button>
       </section>
 
       <section>
-        <p class="label">Onchain settlement proof</p>
-        <p class="value">A completed official x402 buyer flow signed with OKX Wallet settled 0.001 USDC on Base Sepolia:
-https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da</p>
+        <p class="label">Algorand settlement status</p>
+        <p class="value">The hosted Algorand PAYMENT-REQUIRED challenge and GoPlausible AVM capability check are verified. The final paid Testnet transaction and Lora URL will be inserted here after the Seller opts into USDC ASA 10458941 and the funded Pera buyer signs.</p>
         <button type="button">Copy</button>
       </section>
 

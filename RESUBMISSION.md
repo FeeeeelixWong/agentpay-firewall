@@ -1,56 +1,53 @@
-# Brainwave 2026 Resubmission Proof
-
-Copy-ready form view: [docs/resubmission-form.html](docs/resubmission-form.html)
+# Brainwave 2026 Algorand Final-Round Proof
 
 ## Project
 
-**Name:** AgentPay Firewall  
-**Track:** x402 Blockchain Track  
-**Live project:** https://agentpay-firewall.vercel.app/  
+**Name:** AgentPay Firewall
+
+**Track:** Algorand x402 Blockchain Track
+
+**Live project:** https://agentpay-firewall.vercel.app/
+
 **Source:** https://github.com/FeeeeelixWong/agentpay-firewall
 
 ## Required Correction
 
-The project now directly integrates official x402 middleware in its public deployment. The new protected endpoint is:
+The primary public seller now runs x402 on Algorand Testnet:
 
 ```text
 https://agentpay-firewall.vercel.app/api/x402/official
 ```
 
-It uses `@x402/express` payment middleware, `@x402/core` facilitator infrastructure, and the `@x402/evm` exact scheme. An unpaid GET returns HTTP 402 with a standards-compliant x402 v2 `PAYMENT-REQUIRED` header. A valid `PAYMENT-SIGNATURE` is verified and settled through the configured facilitator before the resource is returned with `PAYMENT-RESPONSE`.
+It uses `@x402/express` payment middleware, `@x402/core` facilitator infrastructure, `@x402/avm`, Algorand Testnet USDC ASA `10458941`, and GoPlausible. The relevant dependencies are declared in `package.json`.
 
 ## How To Verify
 
-### In the product
-
-1. Open the live project.
-2. Click **Verify official 402**.
-3. Confirm the status changes to **Official x402 verified**.
-4. Review the decoded protocol details: x402 v2, exact, Base Sepolia, 0.001 USDC.
-
-### From the repository
+### Hosted challenge
 
 ```bash
 npm install
 npm run smoke:x402
 ```
 
-The check asserts the deployed endpoint's HTTP status, official header, protocol version, payment option, and resource binding.
+The smoke test asserts HTTP 402, x402 version 2, exact scheme, Algorand Testnet, ASA `10458941`, amount `1000`, Seller address, and resource binding.
 
-### Onchain proof
+### Product flow
 
-The browser buyer path has already completed an official settlement signed by OKX Wallet:
-
-https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
+1. Open the live app.
+2. Click **Verify official 402**.
+3. Connect Pera Wallet on Testnet.
+4. Run the policy check before signing.
+5. Approve the `0.001 USDC` payment.
+6. Inspect the returned transaction in Lora.
 
 ## Implementation Files
 
-- Hosted seller: [`api/x402/official.ts`](api/x402/official.ts)
-- Hosted verification: [`scripts/x402-hosted-smoke.ts`](scripts/x402-hosted-smoke.ts)
-- Buyer wallet: [`src/lib/okx-wallet.ts`](src/lib/okx-wallet.ts)
-- Official client configuration: [`src/lib/x402-official.ts`](src/lib/x402-official.ts)
-- Settlement evidence: [`docs/x402-settlement-evidence.json`](docs/x402-settlement-evidence.json)
+- Algorand seller: [`api/x402/official.ts`](api/x402/official.ts)
+- AVM configuration: [`src/lib/x402-algorand.ts`](src/lib/x402-algorand.ts)
+- Pera buyer: [`src/lib/algorand-wallet.ts`](src/lib/algorand-wallet.ts)
+- Hosted smoke: [`scripts/x402-hosted-smoke.ts`](scripts/x402-hosted-smoke.ts)
+- Automated payer: [`scripts/x402-algorand-pay.ts`](scripts/x402-algorand-pay.ts)
 
 ## Accuracy Note
 
-The official x402 endpoint and deterministic policy simulator are separate and clearly labeled. `/api/x402/official` is the direct x402 integration. `/api/paid/*` exists only to demonstrate allow, deny, and manual-review policy outcomes without spending evaluator funds.
+`/api/x402/official` is the required Algorand integration. `/api/paid/*` is only a deterministic policy simulator. `/api/x402/base` preserves the prior EVM route but is not claimed as final-round Algorand evidence.

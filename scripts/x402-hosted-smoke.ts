@@ -1,8 +1,12 @@
 import { decodePaymentRequiredHeader } from "@x402/core/http";
 import { execFileSync } from "node:child_process";
-import { HOSTED_X402_RESOURCE_URL } from "../src/lib/x402-official";
+import {
+  ALGORAND_TESTNET_USDC_ASA_ID,
+  HOSTED_ALGORAND_X402_RESOURCE_URL,
+} from "../src/lib/x402-algorand";
 
-const targetUrl = process.env.X402_HOSTED_URL ?? HOSTED_X402_RESOURCE_URL;
+const targetUrl = process.env.X402_HOSTED_URL ?? HOSTED_ALGORAND_X402_RESOURCE_URL;
+const expectedNetworkPrefix = process.env.X402_EXPECTED_NETWORK_PREFIX ?? "algorand:";
 
 type ChallengeResponse = {
   status: number;
@@ -72,9 +76,18 @@ if (!accepted) {
   throw new Error("Official PAYMENT-REQUIRED did not include an accepted payment option.");
 }
 
-if (accepted.scheme !== "exact" || !accepted.network.startsWith("eip155:")) {
+if (accepted.scheme !== "exact" || !accepted.network.startsWith(expectedNetworkPrefix)) {
   throw new Error(
     `Unexpected official payment option: ${accepted.scheme} on ${accepted.network}.`,
+  );
+}
+
+if (
+  expectedNetworkPrefix === "algorand:" &&
+  accepted.extra?.asset !== ALGORAND_TESTNET_USDC_ASA_ID
+) {
+  throw new Error(
+    `Expected Algorand Testnet USDC ASA ${ALGORAND_TESTNET_USDC_ASA_ID}, received ${String(accepted.extra?.asset)}.`,
   );
 }
 

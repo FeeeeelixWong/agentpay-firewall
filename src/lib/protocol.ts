@@ -5,6 +5,7 @@ export type PaymentNetwork =
   | "eip155:42161"
   | "eip155:480"
   | `eip155:${number}`
+  | `algorand:${string}`
   | `solana:${string}`;
 
 export type PaymentRequirement = {
@@ -176,6 +177,9 @@ export const buildExplorerUrl = (network: PaymentNetwork, transaction: string) =
   if (!transaction) return undefined;
   if (network === "eip155:8453") return `https://basescan.org/tx/${transaction}`;
   if (network === "eip155:84532") return `https://sepolia.basescan.org/tx/${transaction}`;
+  if (network.startsWith("algorand:")) {
+    return `https://lora.algokit.io/testnet/transaction/${transaction}`;
+  }
   if (network.startsWith("solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1")) {
     return `https://solscan.io/tx/${transaction}?cluster=devnet`;
   }

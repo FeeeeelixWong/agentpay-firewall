@@ -37,9 +37,14 @@ export const defaultPolicy: AgentPolicy = {
     "chainwatch.dev",
     "oracle-kit.io",
     "AgentPay Firewall official x402 resource",
+    "AgentPay Firewall Algorand x402 resource",
   ],
   allowedAssets: ["USDC"],
-  allowedNetworks: ["eip155:8453", "eip155:84532"],
+  allowedNetworks: [
+    "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+    "eip155:8453",
+    "eip155:84532",
+  ],
   manualApprovalAboveUsd: 0.35,
   maxRiskScore: 55,
 };

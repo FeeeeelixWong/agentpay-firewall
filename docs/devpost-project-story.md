@@ -30,7 +30,7 @@ The public Vercel deployment exposes this official x402-protected resource:
 https://agentpay-firewall.vercel.app/api/x402/official
 ```
 
-It uses `@x402/express` `paymentMiddleware`, `@x402/core` facilitator infrastructure, and the `@x402/evm` exact scheme. An unpaid request returns HTTP 402 with a standards-compliant x402 v2 `PAYMENT-REQUIRED` header for `0.001 USDC` on Base Sepolia.
+It uses `@x402/express` `paymentMiddleware`, `@x402/core` facilitator infrastructure, and the `@x402/avm` exact scheme. An unpaid request returns HTTP 402 with an x402 v2 `PAYMENT-REQUIRED` header for `0.001 USDC` on Algorand Testnet. Verification and settlement are routed through GoPlausible.
 
 The app places this protocol proof first. Evaluators can click **Verify official 402** without connecting a wallet, or run:
 
@@ -46,20 +46,18 @@ The implementation combines:
 
 - React, TypeScript, and Vite for the product interface
 - Vercel serverless functions for the public seller endpoint
-- `@x402/express`, `@x402/core`, `@x402/evm`, and `@x402/fetch`
-- OKX Wallet `eth_signTypedData_v4` authorization without exporting the buyer key
+- `@x402/express`, `@x402/core`, `@x402/avm`, and `@x402/fetch`
+- Pera Wallet transaction authorization without exporting the buyer key
 - a deterministic policy engine for budgets, allowlists, assets, networks, risk, and human approval
 - automated unit, build, hosted x402, and payment lifecycle checks
 
-The official buyer path has also completed a facilitator settlement for `0.001 USDC` on Base Sepolia:
-
-https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
+The hosted Algorand challenge and GoPlausible AVM capability check are live. The final funded Algorand transaction will be attached from Lora after the Seller opts into Testnet USDC ASA `10458941`.
 
 ### Challenges
 
 The hardest product challenge was separating two needs that can easily be confused. Judges need a deterministic way to explore allow, deny, and manual-review behavior without spending funds, while the submission also needs a genuine x402 integration. The final product therefore has two explicit layers: `/api/x402/official` for direct protocol verification and `/api/paid/*` only for policy simulations. The UI and documentation label them separately.
 
-Wallet-network compatibility was another challenge. Base Sepolia is not always exposed as a selectable network in OKX Wallet. The buyer therefore requests the request-bound EIP-712 authorization from the wallet while the x402 facilitator performs the gasless settlement.
+The final round introduced an explicit Algorand requirement after the earlier evaluation. The primary route was migrated from EVM to AVM, the buyer was rebuilt around Pera Wallet, and the old Base path was isolated at `/api/x402/base` so the judging surface is unambiguous.
 
 ### What We Learned
 
@@ -73,7 +71,7 @@ Next steps are durable policy storage, replay and idempotency records, smart-acc
 
 ## Built With
 
-React, TypeScript, Vite, Vercel, Express, `@x402/express`, `@x402/core`, `@x402/evm`, `@x402/fetch`, OKX Wallet, Base Sepolia, and USDC.
+React, TypeScript, Vite, Vercel, Express, `@x402/express`, `@x402/core`, `@x402/avm`, `@x402/fetch`, Pera Wallet, Algorand Testnet, GoPlausible, and USDC ASA `10458941`.
 
 ## Links
 
@@ -81,4 +79,3 @@ React, TypeScript, Vite, Vercel, Express, `@x402/express`, `@x402/core`, `@x402/
 - Official x402 endpoint: https://agentpay-firewall.vercel.app/api/x402/official
 - GitHub: https://github.com/FeeeeelixWong/agentpay-firewall
 - Demo video: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
-- Settlement: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
