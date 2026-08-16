@@ -1,5 +1,7 @@
 # Brainwave 2026 Resubmission Proof
 
+Copy-ready form view: [docs/resubmission-form.html](docs/resubmission-form.html)
+
 ## Project
 
 **Name:** AgentPay Firewall  

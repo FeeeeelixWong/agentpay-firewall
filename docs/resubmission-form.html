@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentPay Firewall - Brainwave 2026 Resubmission</title>
+    <style>
+      :root {
+        color: #17201c;
+        background: #eef2ef;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      main { width: min(920px, calc(100% - 32px)); margin: 48px auto; }
+      header { margin-bottom: 28px; }
+      h1 { margin: 0 0 8px; font-size: clamp(32px, 5vw, 52px); }
+      header p { margin: 0; color: #58655f; font-size: 18px; }
+      section { margin-top: 12px; border: 1px solid #cfd8d3; border-radius: 8px; background: white; padding: 20px; }
+      .label { margin: 0 0 8px; color: #0f6c59; font-size: 13px; font-weight: 800; text-transform: uppercase; }
+      .value { margin: 0; white-space: pre-wrap; line-height: 1.55; }
+      a { color: #0f6c59; overflow-wrap: anywhere; }
+      button { margin-top: 16px; border: 0; border-radius: 6px; background: #123e34; color: white; padding: 10px 14px; font: inherit; font-weight: 750; cursor: pointer; }
+      button:focus-visible { outline: 3px solid #a8dfcb; outline-offset: 2px; }
+      footer { margin: 24px 0; color: #66736d; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>AgentPay Firewall</h1>
+        <p>Brainwave 2026 x402 integration correction</p>
+      </header>
+
+      <section>
+        <p class="label">Live project link</p>
+        <p class="value">https://agentpay-firewall.vercel.app/</p>
+        <button type="button">Copy</button>
+      </section>
+
+      <section>
+        <p class="label">GitHub repository</p>
+        <p class="value">https://github.com/FeeeeelixWong/agentpay-firewall</p>
+        <button type="button">Copy</button>
+      </section>
+
+      <section>
+        <p class="label">Correction implemented</p>
+        <p class="value">AgentPay Firewall now directly integrates official x402 middleware in its public Vercel deployment. The protected endpoint at https://agentpay-firewall.vercel.app/api/x402/official uses @x402/express paymentMiddleware, @x402/core facilitator infrastructure, and the @x402/evm exact scheme. An unpaid GET returns HTTP 402 with a standards-compliant x402 v2 PAYMENT-REQUIRED header for 0.001 USDC on Base Sepolia. A valid PAYMENT-SIGNATURE is verified and settled through the x402.org facilitator before the resource is returned with PAYMENT-RESPONSE.</p>
+        <button type="button">Copy</button>
+      </section>
+
+      <section>
+        <p class="label">How evaluators can verify it</p>
+        <p class="value">1. Open https://agentpay-firewall.vercel.app/.
+2. Click "Verify official 402" in the first panel.
+3. Confirm the status changes to "Official x402 verified".
+4. Review the decoded x402 v2, exact, Base Sepolia, and 0.001 USDC challenge.
+5. Run npm run smoke:x402 from the repository for an automated hosted verification.</p>
+        <button type="button">Copy</button>
+      </section>
+
+      <section>
+        <p class="label">Onchain settlement proof</p>
+        <p class="value">A completed official x402 buyer flow signed with OKX Wallet settled 0.001 USDC on Base Sepolia:
+https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da</p>
+        <button type="button">Copy</button>
+      </section>
+
+      <section>
+        <p class="label">Demo video</p>
+        <p class="value">https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4</p>
+        <button type="button">Copy</button>
+      </section>
+
+      <footer>All links were verified against the public production deployment.</footer>
+    </main>
+    <script>
+      for (const button of document.querySelectorAll("button")) {
+        button.addEventListener("click", async () => {
+          const value = button.parentElement.querySelector(".value").textContent.trim();
+          await navigator.clipboard.writeText(value);
+          button.textContent = "Copied";
+          window.setTimeout(() => { button.textContent = "Copy"; }, 1200);
+        });
+      }
+    </script>
+  </body>
+</html>
