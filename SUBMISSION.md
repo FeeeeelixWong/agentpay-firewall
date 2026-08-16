@@ -41,6 +41,8 @@ npm run smoke:x402
 | Price | `0.001 USDC` |
 | Facilitator | GoPlausible |
 | Seller | `U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA` |
+| Verified transaction | [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) |
+| Confirmed round | `66373009` |
 | Seller middleware | `@x402/express`, `@x402/core`, `@x402/avm` |
 | Browser signer | Pera Wallet |
 
@@ -51,8 +53,9 @@ npm run smoke:x402
 - [x] GoPlausible supports the registered AVM scheme.
 - [x] Pera Wallet buyer integration is implemented.
 - [x] Automated tests and hosted smoke pass.
-- [ ] Seller has Testnet ALGO and has opted into USDC ASA `10458941`.
-- [ ] One final paid transaction is recorded and linked in Lora.
+- [x] Seller is funded and opted into USDC ASA `10458941`.
+- [x] A funded Buyer signed and settled `0.001 USDC` through GoPlausible.
+- [x] The final transaction is confirmed on Algorand Testnet and linked in Lora.
 
 ## Links
 

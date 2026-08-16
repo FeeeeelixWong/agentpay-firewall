@@ -40,6 +40,16 @@ The smoke test asserts HTTP 402, x402 version 2, exact scheme, Algorand Testnet,
 5. Approve the `0.001 USDC` payment.
 6. Inspect the returned transaction in Lora.
 
+### Confirmed paid transaction
+
+- Transaction: [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ)
+- Confirmed round: `66373009`
+- Buyer: `25QHVX3LLUXIOHW7CRNRDDYMNZMVETYPGJIM66O2R2WZUMACHL2RDLRRBM`
+- Seller: `U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA`
+- Asset and amount: `1000` atomic units of USDC ASA `10458941` (`0.001 USDC`)
+- x402 note: `x402-payment-v2-1786898661884`
+- Fee sponsorship: the GoPlausible fee payer supplied the `0.002 ALGO` group fee while the Buyer transfer used a zero transaction fee.
+
 ## Implementation Files
 
 - Algorand seller: [`api/x402/official.ts`](api/x402/official.ts)

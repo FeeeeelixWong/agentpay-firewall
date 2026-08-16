@@ -51,7 +51,7 @@ The implementation combines:
 - a deterministic policy engine for budgets, allowlists, assets, networks, risk, and human approval
 - automated unit, build, hosted x402, and payment lifecycle checks
 
-The hosted Algorand challenge and GoPlausible AVM capability check are live. The final funded Algorand transaction will be attached from Lora after the Seller opts into Testnet USDC ASA `10458941`.
+The complete path is live and reproduced. Pera Wallet signed a request-bound `0.001 USDC` payment, GoPlausible sponsored the atomic group fee and settled it on Algorand Testnet, and the protected resource returned its paid response. The confirmed transaction is [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) at round `66373009`.
 
 ### Challenges
 
@@ -77,5 +77,6 @@ React, TypeScript, Vite, Vercel, Express, `@x402/express`, `@x402/core`, `@x402/
 
 - Live app: https://agentpay-firewall.vercel.app/
 - Official x402 endpoint: https://agentpay-firewall.vercel.app/api/x402/official
+- Verified Algorand settlement: https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ
 - GitHub: https://github.com/FeeeeelixWong/agentpay-firewall
 - Demo video: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4

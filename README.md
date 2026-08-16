@@ -2,7 +2,7 @@
 
 Policy-controlled x402 payments for autonomous agents, now running on Algorand Testnet.
 
-[Live app](https://agentpay-firewall.vercel.app/) | [Algorand x402 endpoint](https://agentpay-firewall.vercel.app/api/x402/official) | [Source](https://github.com/FeeeeelixWong/agentpay-firewall)
+[Live app](https://agentpay-firewall.vercel.app/) | [Algorand x402 endpoint](https://agentpay-firewall.vercel.app/api/x402/official) | [Verified settlement](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) | [Source](https://github.com/FeeeeelixWong/agentpay-firewall)
 
 ## Final-Round Algorand Integration
 
@@ -65,6 +65,7 @@ The policy layer evaluates request amount, daily budget, approved service, netwo
 | --- | --- | --- |
 | Hosted Algorand x402 | Direct seller integration with `@x402/avm` | Click **Verify official 402** or run `npm run smoke:x402` |
 | Pera buyer flow | Wallet-owned Algorand authorization | Connect Pera Wallet and use **Pay 0.001 USDC** |
+| Onchain settlement | Buyer-to-Seller USDC transfer with facilitator fee sponsorship | [Inspect transaction `SEQA...QWDQ` in Lora](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) |
 | Policy scenarios | Allow, deny, and manual-review outcomes before signing | Run the three deterministic scenarios in the app |
 | Base compatibility | The policy product can preserve a previous EVM integration | Inspect `/api/x402/base` and the archived Base evidence |
 
@@ -86,8 +87,12 @@ Seller: U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA
 
 - Live Algorand `402 -> PAYMENT-REQUIRED`: verified.
 - GoPlausible support for the registered AVM scheme: verified.
-- Pera Wallet connection and buyer signing path: implemented.
-- Final Algorand Testnet paid transaction: pending Seller USDC opt-in and funded Buyer execution.
+- Pera Wallet buyer signed the request-bound payment.
+- GoPlausible settled an atomic two-transaction group at round `66373009`.
+- Buyer `25QH...RRBM` paid `0.001 USDC` to Seller `U3SN...PQJA`.
+- The facilitator fee payer covered `0.002 ALGO`; the USDC transfer itself paid zero fee.
+- Transaction: [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ).
+- Machine-readable evidence: [`docs/algorand-x402-settlement-evidence.json`](docs/algorand-x402-settlement-evidence.json).
 
 The earlier Base Sepolia receipt remains available as portability evidence at [docs/x402-settlement-evidence.json](docs/x402-settlement-evidence.json), but it is not presented as the required Algorand final-round transaction.
 

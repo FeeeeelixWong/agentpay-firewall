@@ -9,6 +9,10 @@ export const DEFAULT_ALGORAND_PAY_TO =
 export const HOSTED_ALGORAND_X402_RESOURCE_URL =
   "https://agentpay-firewall.vercel.app/api/x402/official";
 export const ALGORAND_TESTNET_LORA_URL = "https://lora.algokit.io/testnet";
+export const VERIFIED_ALGORAND_SETTLEMENT_TX =
+  "SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ";
+export const VERIFIED_ALGORAND_SETTLEMENT_URL =
+  `${ALGORAND_TESTNET_LORA_URL}/transaction/${VERIFIED_ALGORAND_SETTLEMENT_TX}`;
 
 export type AlgorandX402Config = {
   network: PaymentNetwork;

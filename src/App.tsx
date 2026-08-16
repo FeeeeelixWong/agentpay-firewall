@@ -36,9 +36,9 @@ import {
 } from "./lib/policy";
 import { scenarios, type ScenarioId } from "./lib/scenarios";
 import {
-  ALGORAND_TESTNET_LORA_URL,
   GOPLAUSIBLE_FACILITATOR_URL,
   HOSTED_ALGORAND_X402_RESOURCE_URL,
+  VERIFIED_ALGORAND_SETTLEMENT_URL,
 } from "./lib/x402-algorand";
 
 type StageState = "pending" | "active" | "done" | "blocked" | "error" | "review";
@@ -585,12 +585,12 @@ function App() {
           </button>
           <a
             className="proof-receipt-link"
-            href={ALGORAND_TESTNET_LORA_URL}
+            href={VERIFIED_ALGORAND_SETTLEMENT_URL}
             target="_blank"
             rel="noreferrer"
           >
             <ExternalLink aria-hidden="true" />
-            Inspect Algorand Testnet
+            View settled x402 payment
           </a>
           <p className="proof-wallet-status">
             {activeAddress

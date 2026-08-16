@@ -1,0 +1,30 @@
+{
+  "evidence": "algorand-x402-goplausible-settlement",
+  "status": "confirmed",
+  "x402Version": 2,
+  "scheme": "exact",
+  "network": "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+  "asset": {
+    "type": "ASA",
+    "id": 10458941,
+    "symbol": "USDC",
+    "decimals": 6
+  },
+  "amountAtomic": 1000,
+  "amountDisplay": "0.001 USDC",
+  "buyer": "25QHVX3LLUXIOHW7CRNRDDYMNZMVETYPGJIM66O2R2WZUMACHL2RDLRRBM",
+  "seller": "U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA",
+  "facilitator": "https://facilitator.goplausible.xyz",
+  "facilitatorFeePayer": "ZMFK2OI7ZBD2U27ISERZC4S6LKM6WMFJPZQ4MYNJDZ2VNBNMBA67RA22AA",
+  "transactionId": "SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ",
+  "feePayerTransactionId": "EQV72S4JTQYERKPSC2NO2LLNC2UKE7TSVFXO33SHSY2LY5VZM2FQ",
+  "groupId": "rRcvuLU+geKF9oPbiCOHEaKYn8YQDJJx7+rRL4ZNE6A=",
+  "confirmedRound": 66373009,
+  "confirmedAt": "2026-08-16T16:44:29Z",
+  "buyerTransactionFeeMicroAlgo": 0,
+  "facilitatorGroupFeeMicroAlgo": 2000,
+  "paymentNote": "x402-payment-v2-1786898661884",
+  "feePayerNote": "x402-fee-payer-1786898661884",
+  "resource": "https://agentpay-firewall.vercel.app/api/x402/official",
+  "explorerUrl": "https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ"
+}
