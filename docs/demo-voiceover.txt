@@ -1,8 +1,8 @@
 AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.
 
-AI agents can call paid APIs, but they should not spend from a wallet without rules, budgets, and audit trails.
+The public Vercel endpoint uses official x402 middleware. One click verifies HTTP 402 and decodes the x402 version two PAYMENT-REQUIRED challenge.
 
-The user defines the mandate: request cap, daily budget, approved services, network, asset, risk score, and human approval threshold.
+Agents can pay, but they still need rules. The user defines request caps, budgets, approved services, network, asset, risk score, and human approval.
 
 First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 challenge with PAYMENT-REQUIRED.
 

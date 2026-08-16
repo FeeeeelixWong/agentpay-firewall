@@ -2,67 +2,83 @@
 
 ## Short Description
 
-AgentPay Firewall is a policy wallet for AI agents: it lets agents pay for x402 resources, but only inside user-defined budgets, allowlists, risk limits, and human-approval rules.
+AgentPay Firewall is a policy wallet that lets AI agents pay for official x402 resources only within user-defined budgets, allowlists, risk limits, and approval rules.
 
 ## About The Project
 
 ### Inspiration
 
-AI agents are starting to move from answering questions to taking paid actions: calling premium APIs, buying data, booking services, paying tools, and eventually paying other agents. x402 gives those agents a native internet payment rail. But a payment rail alone is not enough.
+AI agents are moving from answering questions to taking paid actions: calling premium APIs, buying data, booking services, and paying other agents. x402 gives them an internet-native payment rail, but a payment rail alone does not answer the trust question: what is an autonomous agent actually allowed to buy?
 
-The hard question is trust. If an autonomous agent can sign payments, who decides what it is allowed to buy, how much it can spend, and when a human needs to step in? AgentPay Firewall was built around a simple belief: the future agent wallet is not just a signer. It is a mandate engine.
+AgentPay Firewall was built around a simple product belief: an agent wallet should be more than a signer. It should enforce a human-defined mandate before every payment authorization.
 
 ### What It Does
 
-AgentPay Firewall sits between an AI agent and an x402 signer.
+AgentPay Firewall sits between an AI agent and its wallet. It receives an official x402 `402 Payment Required` challenge, checks the payment against policy, and asks the wallet to sign only when the request is allowed.
 
-When an agent requests a paid resource, the resource server returns `402 Payment Required` with a `PAYMENT-REQUIRED` header. AgentPay Firewall decodes the challenge, checks it against policy, and only creates `PAYMENT-SIGNATURE` when the request is allowed.
+The product supports three policy outcomes:
 
-The demo shows three core flows:
+- **Allow:** create `PAYMENT-SIGNATURE`, retry the resource, and receive `PAYMENT-RESPONSE`.
+- **Deny:** stop before the wallet is asked to sign.
+- **Review:** pause a higher-value request for human approval.
 
-- An allowlisted agent buys a small paid API call and receives a settlement receipt.
-- A costly, non-allowlisted request is blocked before signing.
-- A higher-value allowlisted request is routed to manual review.
+### Direct x402 Integration
 
-The product also includes an official x402 path with OKX Wallet typed-data signing and a verified Base Sepolia facilitator settlement for `0.001 USDC`.
+The public Vercel deployment exposes this official x402-protected resource:
+
+```text
+https://agentpay-firewall.vercel.app/api/x402/official
+```
+
+It uses `@x402/express` `paymentMiddleware`, `@x402/core` facilitator infrastructure, and the `@x402/evm` exact scheme. An unpaid request returns HTTP 402 with a standards-compliant x402 v2 `PAYMENT-REQUIRED` header for `0.001 USDC` on Base Sepolia.
+
+The app places this protocol proof first. Evaluators can click **Verify official 402** without connecting a wallet, or run:
+
+```bash
+npm run smoke:x402
+```
+
+The test decodes the deployed challenge with `@x402/core/http` and verifies protocol version, scheme, network, amount, receiver, and resource binding.
 
 ### How We Built It
 
-The public demo is deployed on Vercel and uses serverless `/api/paid/*` routes to show the full HTTP lifecycle:
+The implementation combines:
 
-```text
-402 challenge -> PAYMENT-REQUIRED -> policy check -> PAYMENT-SIGNATURE -> retry -> PAYMENT-RESPONSE
-```
+- React, TypeScript, and Vite for the product interface
+- Vercel serverless functions for the public seller endpoint
+- `@x402/express`, `@x402/core`, `@x402/evm`, and `@x402/fetch`
+- OKX Wallet `eth_signTypedData_v4` authorization without exporting the buyer key
+- a deterministic policy engine for budgets, allowlists, assets, networks, risk, and human approval
+- automated unit, build, hosted x402, and payment lifecycle checks
 
-The production-like path uses:
+The official buyer path has also completed a facilitator settlement for `0.001 USDC` on Base Sepolia:
 
-- `@x402/express` for the official x402 seller middleware
-- `@x402/core` and `@x402/evm` for the official challenge, signer, and facilitator flow
-- OKX Wallet extension signing via `eth_signTypedData_v4`
-- A request-bound policy payload with service, amount, asset, network, resource, payer, and policy decision id
-
-The verified settlement evidence is here:
-
-```text
 https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
-```
 
 ### Challenges
 
-The biggest challenge was making the project both judge-safe and technically honest. A public demo that spends real funds on every click is fragile, but a pure mock is not convincing. The final architecture separates those concerns: the Vercel demo is deterministic and safe, while the official x402 + OKX Wallet path proves real settlement with chain evidence.
+The hardest product challenge was separating two needs that can easily be confused. Judges need a deterministic way to explore allow, deny, and manual-review behavior without spending funds, while the submission also needs a genuine x402 integration. The final product therefore has two explicit layers: `/api/x402/official` for direct protocol verification and `/api/paid/*` only for policy simulations. The UI and documentation label them separately.
 
-Another challenge was wallet-network compatibility. OKX Wallet does not list Base Sepolia as a normal selectable network, so the browser signer path does not force a chain switch. It uses OKX Wallet for the part x402 exact payments need from the buyer: request-bound EIP-712 authorization. The facilitator then performs the gasless settlement.
+Wallet-network compatibility was another challenge. Base Sepolia is not always exposed as a selectable network in OKX Wallet. The buyer therefore requests the request-bound EIP-712 authorization from the wallet while the x402 facilitator performs the gasless settlement.
 
 ### What We Learned
 
-Agentic payments need wallets, but the wallet is not the moat. The policy layer is the moat.
+The agent wallet itself is not the differentiator. The control plane is: standing mandates, pre-sign checks, clear refusal conditions, approval escalation, and evidence after every action.
 
-Humans approve one transaction at a time by reading a wallet popup. Agents need a different model: a standing mandate, runtime checks, clear refusal conditions, and an audit trail after every action. That is the layer AgentPay Firewall explores.
+Human wallet UX asks someone to inspect each popup. Agent payment UX needs enforceable rules that remain safe when no human is watching every request.
 
 ### What's Next
 
-Next steps are persistent policy storage, replay protection, smart-account or session-key enforcement, merchant and agent reputation, and packaging the policy engine as middleware that any x402 seller or agent framework can adopt.
+Next steps are durable policy storage, replay and idempotency records, smart-account or session-key enforcement, organization accounts, and packaging the policy engine as reusable middleware for x402 buyers and sellers.
 
 ## Built With
 
-React, TypeScript, Vite, Node.js, Vercel, `@x402/express`, `@x402/core`, `@x402/evm`, `@x402/fetch`, OKX Wallet, Base Sepolia, USDC.
+React, TypeScript, Vite, Vercel, Express, `@x402/express`, `@x402/core`, `@x402/evm`, `@x402/fetch`, OKX Wallet, Base Sepolia, and USDC.
+
+## Links
+
+- Live app: https://agentpay-firewall.vercel.app/
+- Official x402 endpoint: https://agentpay-firewall.vercel.app/api/x402/official
+- GitHub: https://github.com/FeeeeelixWong/agentpay-firewall
+- Demo video: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
+- Settlement: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da

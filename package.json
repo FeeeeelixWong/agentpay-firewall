@@ -10,6 +10,7 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:x402": "tsx scripts/x402-hosted-smoke.ts",
     "record:demo": "node scripts/record-demo.mjs",
     "x402:ready": "tsx scripts/x402-official-readiness.ts",
     "x402:challenge": "tsx scripts/x402-official-challenge.ts",

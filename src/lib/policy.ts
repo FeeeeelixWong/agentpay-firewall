@@ -25,6 +25,9 @@ export type PolicyDecision = {
 const decisionId = (requirement: PaymentRequirement) =>
   `pol_${requirement.paymentId.replace(/[^a-zA-Z0-9]/g, "").slice(-10)}`;
 
+const formatUsd = (amount: number) =>
+  `$${amount > 0 && amount < 0.01 ? amount.toFixed(3) : amount.toFixed(2)}`;
+
 export const defaultPolicy: AgentPolicy = {
   maxPerRequestUsd: 0.5,
   dailyBudgetUsd: 5,
@@ -54,13 +57,13 @@ export const evaluatePayment = (
     {
       label: "Per-request cap",
       status: requirement.amountUsd <= policy.maxPerRequestUsd ? "pass" : "fail",
-      detail: `$${requirement.amountUsd.toFixed(2)} <= $${policy.maxPerRequestUsd.toFixed(2)}`,
+      detail: `${formatUsd(requirement.amountUsd)} <= ${formatUsd(policy.maxPerRequestUsd)}`,
     },
     {
       label: "Daily budget",
       status:
         policy.spentTodayUsd + requirement.amountUsd <= policy.dailyBudgetUsd ? "pass" : "fail",
-      detail: `$${(policy.spentTodayUsd + requirement.amountUsd).toFixed(2)} / $${policy.dailyBudgetUsd.toFixed(2)}`,
+      detail: `${formatUsd(policy.spentTodayUsd + requirement.amountUsd)} / ${formatUsd(policy.dailyBudgetUsd)}`,
     },
     {
       label: "Asset",
@@ -93,7 +96,7 @@ export const evaluatePayment = (
     return {
       id: decisionId(requirement),
       status: "manual_review",
-      reason: `Manual approval required above $${policy.manualApprovalAboveUsd.toFixed(2)}`,
+      reason: `Manual approval required above ${formatUsd(policy.manualApprovalAboveUsd)}`,
       checks: checks.map((check) =>
         check.label === "Per-request cap" ? { ...check, status: "review" } : check,
       ),

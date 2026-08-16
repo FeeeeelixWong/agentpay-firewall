@@ -14,11 +14,11 @@ import {
   type PaymentRequirement,
   type SettlementResponse,
 } from "./protocol";
-import { X402_TESTNET_FACILITATOR_URL } from "./x402-official";
+import { HOSTED_X402_RESOURCE_URL, X402_TESTNET_FACILITATOR_URL } from "./x402-official";
 
 export const DEFAULT_OKX_X402_TARGET_URL =
   (import.meta as ImportMeta & { env?: { VITE_X402_TARGET_URL?: string } }).env
-    ?.VITE_X402_TARGET_URL ?? "http://127.0.0.1:8790/api/paid/allowed-risk-scan";
+    ?.VITE_X402_TARGET_URL ?? HOSTED_X402_RESOURCE_URL;
 
 type Eip1193Provider = {
   request<T = unknown>(args: { method: string; params?: unknown[] | Record<string, unknown> }): Promise<T>;

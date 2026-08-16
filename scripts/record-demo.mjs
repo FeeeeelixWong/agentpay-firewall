@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, copyFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 
-const appUrl = "http://127.0.0.1:5176";
+const appUrl = process.env.DEMO_APP_URL ?? "https://agentpay-firewall.vercel.app";
 const directApiHealthUrl = "http://127.0.0.1:8787/api/health";
 const proxiedApiHealthUrl = `${appUrl}/api/health`;
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -32,16 +32,16 @@ const segments = [
       "AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.",
   },
   {
-    minDuration: 7.0,
-    caption: "Agents can pay. Wallets still need rules.",
+    minDuration: 8.2,
+    caption: "Live official x402: v2, exact, Base Sepolia.",
     voiceover:
-      "AI agents can call paid APIs, but they should not spend from a wallet without rules, budgets, and audit trails.",
+      "The public Vercel endpoint uses official x402 middleware. One click verifies HTTP 402 and decodes the x402 version two PAYMENT-REQUIRED challenge.",
   },
   {
     minDuration: 8.5,
-    caption: "Mandate: caps, budgets, allowlists, risk, approval.",
+    caption: "Agents can pay. Wallets still need rules.",
     voiceover:
-      "The user defines the mandate: request cap, daily budget, approved services, network, asset, risk score, and human approval threshold.",
+      "Agents can pay, but they still need rules. The user defines request caps, budgets, approved services, network, asset, risk score, and human approval.",
   },
   {
     minDuration: 8.2,
@@ -306,6 +306,12 @@ const spawnDevProcess = (scriptName) => {
 };
 
 const ensureLocalStack = async () => {
+  const appHost = new URL(appUrl).hostname;
+
+  if (appHost !== "127.0.0.1" && appHost !== "localhost") {
+    return () => {};
+  }
+
   const processes = [];
 
   if (!(await reachable(directApiHealthUrl))) {
@@ -617,12 +623,17 @@ const recordBrowserDemo = async (evidence, timedSegments) => {
     await installCaptionOverlay(page);
 
     await step(page, timedSegments, 0);
-    await step(page, timedSegments, 1);
+    await step(page, timedSegments, 1, async () => {
+      await page.getByRole("button", { name: "Verify official 402" }).click();
+      await page.locator(".status-card", { hasText: "Official x402 verified" }).waitFor({
+        timeout: 20_000,
+      });
+    });
     await step(page, timedSegments, 2);
 
     await step(page, timedSegments, 3, async () => {
       await page.getByRole("button", { name: /Allowed paid API/ }).click();
-      await page.getByRole("button", { name: "Run x402 flow" }).click();
+      await page.getByRole("button", { name: "Run policy simulation" }).click();
       await page.locator(".status-card", { hasText: "Payment settled" }).waitFor({
         timeout: 10_000,
       });
@@ -637,7 +648,7 @@ const recordBrowserDemo = async (evidence, timedSegments) => {
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
       await pause(900);
       await page.getByRole("button", { name: /Blocked overspend/ }).click();
-      await page.getByRole("button", { name: "Run x402 flow" }).click();
+      await page.getByRole("button", { name: "Run policy simulation" }).click();
       await page.locator(".status-card", { hasText: "Blocked before signing" }).waitFor({
         timeout: 10_000,
       });
@@ -645,7 +656,7 @@ const recordBrowserDemo = async (evidence, timedSegments) => {
 
     await step(page, timedSegments, 6, async () => {
       await page.getByRole("button", { name: /Manual review/ }).click();
-      await page.getByRole("button", { name: "Run x402 flow" }).click();
+      await page.getByRole("button", { name: "Run policy simulation" }).click();
       await page.locator(".status-card", { hasText: "Waiting for human approval" }).waitFor({
         timeout: 10_000,
       });

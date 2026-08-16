@@ -1,12 +1,15 @@
 import {
   Activity,
   AlertTriangle,
+  BadgeCheck,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
+  ExternalLink,
   LockKeyhole,
   Play,
   RefreshCcw,
+  Server,
   ShieldCheck,
   ShieldX,
   WalletCards,
@@ -31,6 +34,7 @@ import {
   type PolicyDecision,
 } from "./lib/policy";
 import { scenarios, type ScenarioId } from "./lib/scenarios";
+import { HOSTED_X402_RESOURCE_URL } from "./lib/x402-official";
 
 type StageState = "pending" | "active" | "done" | "blocked" | "error" | "review";
 
@@ -58,7 +62,7 @@ type RunResult = {
   paymentRequiredHeader?: string;
   paymentSignatureHeader?: string;
   paymentResponseHeader?: string;
-  transport?: "server" | "browser-sim" | "okx-wallet";
+  transport?: "server" | "browser-sim" | "official-challenge" | "okx-wallet";
 };
 
 const initialStages: FlowStage[] = [
@@ -140,7 +144,7 @@ const resetFrom = (stages: FlowStage[], activeId: string) => {
 
 const defaultOfficialX402TargetUrl =
   (import.meta as ImportMeta & { env?: { VITE_X402_TARGET_URL?: string } }).env
-    ?.VITE_X402_TARGET_URL ?? "http://127.0.0.1:8790/api/paid/allowed-risk-scan";
+    ?.VITE_X402_TARGET_URL ?? HOSTED_X402_RESOURCE_URL;
 
 function App() {
   const [policy, setPolicy] = useState<AgentPolicy>(defaultPolicy);
@@ -151,7 +155,7 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okxAddress, setOkxAddress] = useState<string | null>(null);
-  const [officialTargetUrl, setOfficialTargetUrl] = useState(defaultOfficialX402TargetUrl);
+  const officialTargetUrl = defaultOfficialX402TargetUrl;
 
   const selectedScenario = scenarios[activeScenario];
   const remainingBudget = Math.max(policy.dailyBudgetUsd - policy.spentTodayUsd, 0);
@@ -164,9 +168,12 @@ function App() {
     if (blocked) return "Blocked before signing";
     if (review) return "Waiting for human approval";
     if (completed === stages.length) return "Payment settled";
+    if (result.transport === "official-challenge" && completed >= 2) {
+      return "Official x402 verified";
+    }
     if (isRunning) return "Running x402 flow";
     return "Ready";
-  }, [isRunning, stages]);
+  }, [isRunning, result.transport, stages]);
 
   const addAuditEvent = (event: Omit<AuditEvent, "id" | "time">) => {
     setAuditLog((events) => [
@@ -336,6 +343,59 @@ function App() {
     }
   };
 
+  const verifyOfficialX402Challenge = async () => {
+    setActiveScenario("allowed-risk-scan");
+    setError(null);
+    setResult({});
+    setStages(initialStages.map((stage) => ({ ...stage, state: "pending" })));
+    setIsRunning(true);
+
+    try {
+      const { fetchOfficialX402Challenge } = await import("./lib/okx-wallet");
+
+      setStages((current) => updateStage(current, "challenge", "active"));
+      const challenge = await fetchOfficialX402Challenge(officialTargetUrl);
+      setResult({
+        requirement: challenge.requirement,
+        paymentRequiredHeader: challenge.header,
+        transport: "official-challenge",
+      });
+      setStages((current) => updateStage(current, "challenge", "done"));
+
+      setStages((current) => updateStage(current, "policy", "active"));
+      const decision = evaluatePayment(challenge.requirement, policy);
+      setResult((current) => ({ ...current, decision }));
+
+      if (decision.status !== "approved") {
+        const state = decision.status === "blocked" ? "blocked" : "review";
+        setStages((current) => updateStage(current, "policy", state));
+        throw new Error(`Official challenge did not pass policy: ${decision.reason}`);
+      }
+
+      setStages((current) => updateStage(current, "policy", "done"));
+      addAuditEvent({
+        title: "Official x402 challenge verified",
+        detail: `Decoded x402 v${challenge.paymentRequired.x402Version} exact payment on ${challenge.requirement.network} for ${formatCurrency(challenge.requirement.amountUsd)}.`,
+        status: "approved",
+      });
+    } catch (runError) {
+      const message =
+        runError instanceof Error ? runError.message : "Unknown official x402 verification error";
+      setError(message);
+      setStages((current) => {
+        const active = current.find((stage) => stage.state === "active");
+        return active ? updateStage(current, active.id, "error") : current;
+      });
+      addAuditEvent({
+        title: "Official x402 verification failed",
+        detail: message,
+        status: "blocked",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const runOkxWalletPayment = async () => {
     setActiveScenario("allowed-risk-scan");
     setError(null);
@@ -440,11 +500,11 @@ function App() {
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">x402 blockchain track</p>
+          <p className="eyebrow">Brainwave 2026 · direct x402 integration</p>
           <h1>AgentPay Firewall</h1>
           <p className="lede">
-            A policy wallet that lets AI agents pay for HTTP 402 resources without giving them
-            unlimited signing power.
+            Give AI agents a payment mandate, not unlimited wallet access. Every x402 request is
+            checked before the wallet signs.
           </p>
         </div>
         <div className="status-card" aria-live="polite">
@@ -452,6 +512,69 @@ function App() {
           <span>{stageSummary}</span>
         </div>
       </header>
+
+      <section className="proof-panel" aria-label="Official x402 integration proof">
+        <div className="proof-copy">
+          <div className="proof-kicker">
+            <BadgeCheck aria-hidden="true" />
+            <span>Official x402 endpoint live</span>
+          </div>
+          <h2>Verify the protocol before testing the policy</h2>
+          <p>
+            The hosted resource is protected by <code>@x402/express</code> and the x402.org
+            facilitator. It returns a standard v2 challenge, accepts an exact USDC payment, and
+            settles on Base Sepolia.
+          </p>
+          <div className="proof-meta" aria-label="Official x402 configuration">
+            <span>x402 v2</span>
+            <span>Exact scheme</span>
+            <span>Base Sepolia</span>
+            <span>0.001 USDC</span>
+          </div>
+          <a
+            className="endpoint-link"
+            href={officialTargetUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Server aria-hidden="true" />
+            {officialTargetUrl}
+          </a>
+        </div>
+
+        <div className="proof-actions">
+          <button
+            type="button"
+            className="proof-primary"
+            onClick={verifyOfficialX402Challenge}
+            disabled={isRunning}
+          >
+            <Server aria-hidden="true" />
+            {isRunning ? "Verifying" : "Verify official 402"}
+          </button>
+          <button
+            type="button"
+            className="proof-secondary"
+            onClick={runOkxWalletPayment}
+            disabled={isRunning}
+          >
+            <WalletCards aria-hidden="true" />
+            Pay with OKX Wallet
+          </button>
+          <a
+            className="proof-receipt-link"
+            href="https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ExternalLink aria-hidden="true" />
+            View verified settlement
+          </a>
+          <p className="proof-wallet-status">
+            {okxAddress ? `Connected: ${shortHash(okxAddress, 10, 6)}` : "No wallet needed to verify the challenge."}
+          </p>
+        </div>
+      </section>
 
       <section className="workspace-grid" aria-label="AgentPay Firewall demo">
         <aside className="panel policy-panel">
@@ -535,8 +658,8 @@ function App() {
           <div className="section-heading">
             <WalletCards aria-hidden="true" />
             <div>
-              <h2>Agent Request</h2>
-              <p>Select what the agent is trying to buy.</p>
+              <h2>Policy Scenarios</h2>
+              <p>Test what the agent may buy after an x402 challenge.</p>
             </div>
           </div>
 
@@ -574,43 +697,11 @@ function App() {
               aria-busy={isRunning}
             >
               <Play aria-hidden="true" />
-              {isRunning ? "Running flow" : "Run x402 flow"}
+              {isRunning ? "Running scenario" : "Run policy simulation"}
             </button>
             <button type="button" className="secondary-action" onClick={resetDemo} disabled={isRunning}>
               <RefreshCcw aria-hidden="true" />
               Reset
-            </button>
-          </div>
-
-          <div className="wallet-box">
-            <div className="wallet-box-heading">
-              <WalletCards aria-hidden="true" />
-              <div>
-                <strong>Official x402 with OKX</strong>
-                <span>{okxAddress ? shortHash(okxAddress, 10, 6) : "Wallet not connected"}</span>
-              </div>
-            </div>
-            <label>
-              <span>Official resource URL</span>
-              <input
-                value={officialTargetUrl}
-                onChange={(event) => setOfficialTargetUrl(event.currentTarget.value)}
-                disabled={isRunning}
-              />
-            </label>
-            <p className="wallet-help">
-              Local x402 resources require `npm run dev:x402` and the local app at
-              `http://127.0.0.1:5176`; hosted HTTPS pages cannot call local HTTP URLs.
-            </p>
-            <button
-              type="button"
-              className="wallet-action"
-              onClick={runOkxWalletPayment}
-              disabled={isRunning}
-              aria-busy={isRunning}
-            >
-              <WalletCards aria-hidden="true" />
-              {isRunning ? "Waiting for wallet" : "Sign x402 with OKX"}
             </button>
           </div>
 
@@ -667,6 +758,14 @@ function App() {
             <div className="transport-note">
               Static fallback is active because no serverless API responded. Local and Vercel runs
               use the real `/api/paid/*` resource server.
+            </div>
+          ) : null}
+
+          {result.transport === "official-challenge" ? (
+            <div className="official-note">
+              <BadgeCheck aria-hidden="true" />
+              This header was generated by the hosted official x402 middleware and decoded by
+              <code>@x402/core</code>.
             </div>
           ) : null}
 

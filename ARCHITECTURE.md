@@ -1,285 +1,133 @@
 # AgentPay Firewall Architecture
 
-AgentPay Firewall is built as a judge-safe implementation of an x402 policy wallet. The current deployment proves the HTTP payment lifecycle and policy controls without requiring judges to fund a wallet. This document describes what is live today, what official x402 SDK/facilitator code now ships in the repo, how the OKX Wallet browser buyer signs real x402 payloads, and what remains for a production rollout.
+AgentPay Firewall combines a live official x402 seller, a pre-sign policy engine, and wallet-controlled buyer authorization. The public product deliberately separates protocol proof from deterministic policy scenarios so evaluators can tell which path is real x402 and which path is simulation.
 
-## What Runs Today
+## System Boundary
 
-The production demo is deployed at:
+```mermaid
+flowchart TB
+  subgraph Buyer["Buyer side"]
+    Agent["AI agent"]
+    Policy["Policy firewall"]
+    Wallet["OKX Wallet signer"]
+  end
 
-```text
-https://agentpay-firewall.vercel.app
+  subgraph Seller["Vercel deployment"]
+    Official["/api/x402/official\n@x402/express middleware"]
+    Sim["/api/paid/*\npolicy scenario API"]
+  end
+
+  Facilitator["x402.org facilitator"]
+  Chain["Base Sepolia USDC"]
+
+  Agent --> Official
+  Official -->|"402 PAYMENT-REQUIRED"| Policy
+  Policy -->|"allow"| Wallet
+  Policy -->|"deny or review"| Agent
+  Wallet -->|"PAYMENT-SIGNATURE"| Official
+  Official --> Facilitator
+  Facilitator --> Chain
+  Official -->|"PAYMENT-RESPONSE + resource"| Agent
+  Agent -. "judge-safe scenarios" .-> Sim
 ```
 
-The browser calls Vercel serverless routes under `/api/paid/*`. Those routes implement the same external shape that an x402-paid resource server exposes:
+## Layer A: Hosted Official x402 Resource
 
-1. A buyer agent requests a paid resource.
-2. The resource server returns HTTP `402` with a `PAYMENT-REQUIRED` header.
-3. The policy wallet evaluates the payment requirement against user rules.
-4. Only approved requests receive a `PAYMENT-SIGNATURE`.
-5. The client retries the same resource with the signature header.
-6. The resource server verifies the request-bound payload and returns `PAYMENT-RESPONSE` plus a receipt.
+Public endpoint:
 
-The demo policy layer checks:
+```text
+https://agentpay-firewall.vercel.app/api/x402/official
+```
+
+Implementation: [api/x402/official.ts](api/x402/official.ts)
+
+The serverless route constructs:
+
+- `HTTPFacilitatorClient` from `@x402/core/server`
+- `x402ResourceServer` and `paymentMiddleware` from `@x402/express`
+- `ExactEvmScheme` from `@x402/evm/exact/server`
+
+The middleware, not application code, generates the x402 v2 `PAYMENT-REQUIRED` challenge. Its current accepted payment option is:
+
+```text
+scheme: exact
+network: eip155:84532
+amount: 1000 atomic USDC units
+payTo: 0x4a6aae28b27681856ae824af82fea87896ecc3ed
+facilitator: https://x402.org/facilitator
+```
+
+`npm run smoke:x402` fetches the deployed resource, requires HTTP 402, decodes the official header with `@x402/core/http`, and asserts scheme, network, and resource binding.
+
+## Layer B: Pre-Sign Policy Firewall
+
+The policy engine runs after a payment challenge is received and before the buyer wallet is asked to sign. It checks:
 
 - service allowlist
-- max amount per request
+- per-request limit
 - daily budget
-- asset
-- network
+- asset and network
 - risk score
 - human approval threshold
 
-The current public receipt is a generated demo receipt, not an onchain settlement. It is marked `receiptKind: "demo-facilitator"` and `onchain: false` in both the API response body and `PAYMENT-RESPONSE` header. That choice keeps the hosted judge demo safe, fast, and free from external wallet/facilitator failure modes. For a funded testnet run, the OKX Wallet browser path uses the official x402 middleware and facilitator response.
+Its three outcomes are deterministic:
 
-## Why This Is Not Just a Static Mock
+| Decision | Wallet behavior | Payment behavior |
+| --- | --- | --- |
+| Allow | Signing may proceed | Client can retry the x402 resource |
+| Deny | Signing is never requested | No payment authorization exists |
+| Review | Signing pauses | A human must approve first |
 
-The Vercel path uses live HTTP requests to serverless paid-resource routes. Judges can verify it with:
+The public `/api/paid/*` routes provide stable scenario data for demonstrating these decisions. Their generated receipts are explicitly marked `demo-facilitator` and `onchain: false`; they are not presented as official settlement evidence.
 
-```bash
-npm run smoke
-```
+## Layer C: Wallet-Controlled Buyer
 
-The smoke test performs the complete hosted flow:
+Implementation: [src/lib/okx-wallet.ts](src/lib/okx-wallet.ts)
 
-```text
-GET /api/paid/allowed-risk-scan
-<- 402 PAYMENT-REQUIRED
-policy wallet creates PAYMENT-SIGNATURE
-GET /api/paid/allowed-risk-scan with PAYMENT-SIGNATURE
-<- 200 PAYMENT-RESPONSE + receipt
-```
+The browser buyer:
 
-GitHub Pages is only a static fallback. The primary demo path is Vercel.
+1. Requests the official hosted resource.
+2. Decodes `PAYMENT-REQUIRED` with the official x402 client APIs.
+3. Runs the payment through the policy engine.
+4. Builds the exact EVM authorization.
+5. Requests `eth_signTypedData_v4` from OKX Wallet.
+6. Retries with `PAYMENT-SIGNATURE`.
+7. Decodes `PAYMENT-RESPONSE` and links any returned transaction hash to an explorer.
 
-## Official x402 Harness
+The private key remains inside the wallet extension. AgentPay Firewall receives only the account address and signed authorization.
 
-The repo now includes a minimal official x402 path alongside the judge-safe public demo.
+## Settlement Evidence
 
-### Seller Path
-
-File:
-
-```text
-server/x402-official.ts
-```
-
-This server uses:
-
-- `@x402/express` `paymentMiddleware`
-- `@x402/core/server` `HTTPFacilitatorClient`
-- `@x402/express` `x402ResourceServer`
-- `@x402/evm/exact/server` `ExactEvmScheme`
-
-Default configuration:
+A completed official x402 run produced this Base Sepolia settlement:
 
 ```text
-X402_MODE=testnet
-X402_NETWORK=eip155:84532
-X402_FACILITATOR_URL=https://x402.org/facilitator
-X402_PRICE=$0.001
-```
-
-Run it with a receiving wallet:
-
-```bash
-X402_PAY_TO=0xYourReceivingWallet npm run dev:x402
-```
-
-Verified behavior:
-
-```text
-GET /api/paid/allowed-risk-scan
-<- 402 PAYMENT-REQUIRED
-```
-
-The returned `PAYMENT-REQUIRED` header is generated by official x402 middleware, not the local demo signer.
-
-Automated check while `dev:x402` is running:
-
-```bash
-npm run x402:challenge
-```
-
-### Buyer Path
-
-#### Browser buyer path with OKX Wallet
-
-File:
-
-```text
-src/lib/okx-wallet.ts
-```
-
-This is the recommended product verification path because it does not require a private key to leave the user's wallet.
-
-The browser buyer flow:
-
-1. Detects the OKX Wallet extension via the injected EIP-1193 provider (`window.okxwallet`, `window.okxwallet.ethereum`, or an OKX entry in `window.ethereum.providers`).
-2. Requests account access with `eth_requestAccounts`.
-3. If the x402 challenge uses an OKX-supported EVM network, asks the wallet to switch/add that network.
-4. Fetches the official protected route and decodes the x402 `PAYMENT-REQUIRED` header.
-5. Builds the official x402 payment payload through `@x402/core/client` and `@x402/evm/exact/client`.
-6. Asks OKX Wallet to sign the EIP-712 typed data with `eth_signTypedData_v4`.
-7. Encodes the result as `PAYMENT-SIGNATURE`, retries the original resource, and decodes the returned `PAYMENT-RESPONSE`.
-8. Normalizes the facilitator receipt into the same receipt model used by the public demo, including explorer links when a transaction hash is present.
-
-Run it locally with:
-
-```bash
-X402_PAY_TO=0xYourReceivingWallet npm run dev:x402
-npm run dev:web
-```
-
-Open:
-
-```text
-http://127.0.0.1:5176
-```
-
-Then click **Sign x402 with OKX**. The default resource URL points at the local official x402 seller:
-
-```text
-http://127.0.0.1:8790/api/paid/allowed-risk-scan
-```
-
-For a remote official x402 seller, set:
-
-```bash
-VITE_X402_TARGET_URL=https://your-official-x402-resource.example/path npm run dev:web
-```
-
-Compatibility note: OKX Wallet's documented supported EVM list includes Base mainnet (`eip155:8453`) but not Base Sepolia (`eip155:84532`). The browser path therefore treats chain switching as optional. For the default Base Sepolia testnet route, the app still asks OKX Wallet to sign the request-bound EIP-712 authorization because x402 EIP-3009 settlement is gasless and performed by the facilitator. If the installed wallet build refuses unknown-chain typed data, use the CLI harness for Base Sepolia or run the seller on an OKX-supported mainnet resource.
-
-#### CLI buyer harness
-
-File:
-
-```text
-scripts/x402-official-pay.ts
-```
-
-This script uses:
-
-- `@x402/fetch` `wrapFetchWithPaymentFromConfig`
-- `@x402/evm/exact/client` `ExactEvmScheme`
-- `viem/accounts` `privateKeyToAccount`
-- official `PAYMENT-RESPONSE` decoding
-
-Run it with a funded testnet buyer wallet when automated private-key regression testing is needed:
-
-```bash
-X402_EVM_PRIVATE_KEY=0xYourFundedBuyerKey npm run x402:pay
-```
-
-`x402:pay` defaults to:
-
-```text
-http://127.0.0.1:8790/api/paid/allowed-risk-scan
-```
-
-Set `X402_TARGET_URL` to point it at any official x402 protected resource.
-
-### Readiness Check
-
-File:
-
-```text
-scripts/x402-official-readiness.ts
-scripts/x402-official-challenge.ts
-```
-
-Run:
-
-```bash
-npm run x402:ready
-```
-
-`x402:ready` constructs the official facilitator client, resource server, EVM server scheme, x402 buyer client, and buyer fetch wrapper when a private key is present. Missing `X402_PAY_TO` or `X402_EVM_PRIVATE_KEY` is reported as a checklist item, not a CI failure.
-
-`x402:challenge` calls the protected route and decodes the official x402 `PAYMENT-REQUIRED` header. It requires `dev:x402` to be running.
-
-## Receipt and Explorer Evidence
-
-The receipt model now distinguishes demo evidence from real facilitator evidence:
-
-```ts
-receiptKind: "demo-facilitator" | "x402-facilitator"
-onchain: boolean
-facilitatorUrl?: string
-explorerUrl?: string
-evidenceNote: string
-```
-
-The hosted demo returns:
-
-```text
-receiptKind = demo-facilitator
-onchain = false
-```
-
-The official payment script normalizes facilitator `PAYMENT-RESPONSE` into:
-
-```text
-receiptKind = x402-facilitator
-onchain = true when a transaction hash is returned
-explorerUrl = network-specific explorer link when supported
-```
-
-The OKX Wallet browser path uses the same `createFacilitatorSettlementResponse` normalization. The only difference is the signer: the CLI harness signs through a process environment private key, while the browser product path signs through OKX Wallet's extension popup and only receives the resulting signature. This keeps the buyer key out of the web app even when the seller is still the local official x402 Base Sepolia test route.
-
-Verified OKX Wallet settlement:
-
-```text
-Network: Base Sepolia (eip155:84532)
 Payer: 0x0934146ca4f8e611da0ef8bd295ee9f7e34741fe
 Pay to: 0x4a6aae28b27681856ae824af82fea87896ecc3ed
 Token: USDC at 0x036CbD53842c5426634e7929541eC2318f3dCF7e
 Amount: 1000 atomic units = 0.001 USDC
 Block: 44196133
-Transaction: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
-Evidence JSON: docs/x402-settlement-evidence.json
+Transaction: 0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
 ```
 
-Explorer mapping currently supports:
+Explorer: https://sepolia.basescan.org/tx/0x322c19b1bc8e579e687e5cafdf7861ed5ebe47570b03a9ac0576dc128acdc6da
 
-- Base mainnet: `https://basescan.org/tx/{transaction}`
-- Base Sepolia: `https://sepolia.basescan.org/tx/{transaction}`
-- Solana mainnet: `https://solscan.io/tx/{signature}`
-- Solana devnet: `https://solscan.io/tx/{signature}?cluster=devnet`
+Evidence JSON: [docs/x402-settlement-evidence.json](docs/x402-settlement-evidence.json)
 
-## Mainnet/CDP Switch
+## Security Properties
 
-For production mainnet settlement:
+- No buyer private key is stored by the app.
+- Denied requests never reach the wallet-signing step.
+- The payment authorization is bound to resource, amount, network, receiver, and validity window by the exact EVM scheme.
+- The official seller route delegates verification and settlement to x402 middleware and facilitator infrastructure.
+- Simulation receipts and onchain receipts have distinct types and labels.
+- Server responses use `Cache-Control: no-store` and expose only the x402 payment headers required by the browser client.
 
-```bash
-X402_MODE=mainnet
-X402_NETWORK=eip155:8453
-X402_FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402
-CDP_API_KEY_ID=...
-CDP_API_KEY_SECRET=...
-```
+## Production Hardening
 
-The current repo does not ship real secrets or a funded wallet. A real mainnet run must provide a receiving wallet, buyer wallet, token balance, and facilitator authentication. The browser product path can keep the buyer key inside OKX Wallet; only seller/facilitator credentials belong on the server side.
-
-## Dependency Note
-
-`@x402/evm@2.18.0` currently declares a `viem` dependency range that is newer than the latest `viem` package available from the npm registry in this environment. The repo pins `viem@2.47.1` via npm `overrides` so the official x402 TypeScript packages install and compile reproducibly.
-
-## Remaining Production Hardening
-
-1. Store policy decisions, requirement digests, facilitator receipts, and idempotency keys in durable storage.
-2. Reject reused signatures outside the original resource, amount, network, service, and expiration window.
-3. Add smart accounts or session keys for hard onchain limits.
-4. Extend official harness to Solana/SVM if the track rewards multi-chain settlement.
-5. Add a hosted official x402 seller endpoint so the OKX Wallet flow can be reproduced without running the local `dev:x402` server.
+The hackathon build proves direct protocol integration and the policy boundary. A commercial deployment would additionally add durable policy storage, idempotency records, operational monitoring, authenticated organization accounts, and smart-account or session-key limits.
 
 ## References
 
 - x402 introduction: https://docs.x402.org/introduction
-- x402 facilitator concept: https://docs.x402.org/core-concepts/facilitator
+- x402 facilitator: https://docs.x402.org/core-concepts/facilitator
 - x402 seller quickstart: https://docs.x402.org/getting-started/quickstart-for-sellers
-- Coinbase x402 migration/package reference: https://docs.cdp.coinbase.com/x402/migration-guide
-- Coinbase x402 buyer quickstart and facilitator URLs: https://docs.cdp.coinbase.com/x402/quickstart-for-buyers
-- OKX Wallet supported networks: https://web3.okx.com/onchainos/dev-docs/wallet/supported-networks
-- OKX Wallet EVM provider API: https://web3.okx.com/onchainos/dev-docs/wallet/dapp-connect/chains/evm/provider
-- EIP-1193 Ethereum Provider JavaScript API: https://eips.ethereum.org/EIPS/eip-1193
