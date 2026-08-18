@@ -4,7 +4,8 @@ import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 
 const appUrl = process.env.DEMO_APP_URL ?? "https://agentpay-firewall.vercel.app";
-const directApiHealthUrl = "http://127.0.0.1:8787/api/health";
+const demoApiPort = process.env.PORT ?? "8787";
+const directApiHealthUrl = `http://127.0.0.1:${demoApiPort}/api/health`;
 const proxiedApiHealthUrl = `${appUrl}/api/health`;
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
@@ -13,7 +14,7 @@ const tempDir = resolve("tmp/demo-video");
 const voiceoverDir = join(tempDir, "voiceover");
 const edgeTtsVenv = resolve("tmp/edge-tts-venv");
 const edgeTtsPython = join(edgeTtsVenv, "bin", "python");
-const edgeTtsVoice = process.env.DEMO_TTS_VOICE ?? "en-US-JennyNeural";
+const edgeTtsVoice = process.env.DEMO_TTS_VOICE ?? "en-US-AvaMultilingualNeural";
 
 const rawWebm = join(tempDir, "agentpay-firewall-demo.raw.webm");
 const voiceoverAudio = join(tempDir, "agentpay-firewall-demo.wav");
@@ -22,68 +23,68 @@ const publicMp4 = join(publicDir, "agentpay-firewall-demo.mp4");
 const publicWebm = join(publicDir, "agentpay-firewall-demo.webm");
 const publicSrt = join(publicDir, "agentpay-firewall-demo.srt");
 const voiceoverFile = resolve("docs/demo-voiceover.txt");
-const evidenceFile = resolve("docs/x402-settlement-evidence.json");
+const evidenceFile = resolve("docs/algorand-x402-settlement-evidence.json");
 
 const segments = [
   {
     minDuration: 5.8,
-    caption: "AgentPay Firewall: policy-controlled agent payments.",
+    caption: "Pre-sign policy control for agent payments.",
     voiceover:
-      "AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.",
+      "AgentPay Firewall is a pre-sign policy layer for autonomous agent payments.",
   },
   {
     minDuration: 8.2,
-    caption: "Live official x402: v2, exact, Base Sepolia.",
+    caption: "Live x402 v2 on Algorand Testnet.",
     voiceover:
-      "The public Vercel endpoint uses official x402 middleware. One click verifies HTTP 402 and decodes the x402 version two PAYMENT-REQUIRED challenge.",
+      "The live Vercel endpoint runs x402 version two directly on Algorand Testnet. One click verifies the HTTP 402 PAYMENT-REQUIRED challenge.",
   },
   {
     minDuration: 8.5,
     caption: "Agents can pay. Wallets still need rules.",
     voiceover:
-      "Agents can pay, but they still need rules. The user defines request caps, budgets, approved services, network, asset, risk score, and human approval.",
+      "Agents can pay, but wallets still need rules. The owner defines request caps, budgets, approved services, network, asset, risk score, and human approval.",
   },
   {
     minDuration: 8.2,
-    caption: "Allowed flow: paid wallet-risk API returns HTTP 402.",
+    caption: "Allowed flow: seller returns an x402 challenge.",
     voiceover:
-      "First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 challenge with PAYMENT-REQUIRED.",
+      "First, the agent calls a paid wallet-risk API. The seller returns an x402 challenge for exactly 0.001 USDC.",
   },
   {
     minDuration: 8.5,
-    caption: "Policy passed: sign, retry, receive PAYMENT-RESPONSE.",
+    caption: "Policy passed: authorize, retry, receive the result.",
     voiceover:
-      "The firewall checks every gate. This request passes, so it signs, retries, and receives PAYMENT-RESPONSE.",
+      "This simulation shows the approved path. Every policy gate passes before wallet authorization, then the paid request is retried and returns PAYMENT-RESPONSE.",
   },
   {
     minDuration: 9.0,
     caption: "Blocked flow: untrusted overspend stops before signing.",
     voiceover:
-      "Now the unsafe path. A costly non-allowlisted crawl gets the same challenge, but policy fails before signing.",
+      "Now the unsafe path. A costly non-allowlisted crawl receives a challenge, but policy fails before signing, so no payment authorization is created.",
   },
   {
     minDuration: 8.0,
     caption: "Manual review: allowed service, approval required.",
     voiceover:
-      "A third request is allowed, but crosses the human approval threshold. The wallet pauses instead of silently spending.",
+      "A third request uses an approved service but crosses the human approval threshold. The wallet pauses instead of silently spending.",
   },
   {
     minDuration: 9.0,
-    caption: "Official path: OKX Wallet signs x402 typed data.",
+    caption: "Real path: Pera Wallet signs the AVM payment group.",
     voiceover:
-      "For the production path, the buyer key stays inside OKX Wallet. The app asks OKX to sign x402 typed data with eth_signTypedData_v4.",
+      "In the real path, the buyer key stays inside Pera Wallet. GoPlausible sponsors the group fee and settles the signed Algorand payment.",
   },
   {
     minDuration: 11.5,
-    caption: "Verified settlement: 0.001 USDC on Base Sepolia.",
+    caption: "Confirmed settlement: 0.001 USDC on Algorand Testnet.",
     voiceover:
-      "We reproduced that path on Base Sepolia. The facilitator settled 0.001 USDC and returned an official x402 receipt with an explorer transaction.",
+      "This is the confirmed transaction. GoPlausible settled 0.001 USDC on Algorand Testnet and returned PAYMENT-RESPONSE with verifiable Lora evidence.",
   },
   {
     minDuration: 7.4,
     caption: "Control layer for agentic payments.",
     voiceover:
-      "So the project is not just another agent wallet. It is the control layer that decides when autonomous payments are safe to execute.",
+      "AgentPay Firewall connects seller pricing, buyer-owned policy, wallet authorization, facilitator settlement, and an auditable onchain receipt.",
   },
 ];
 
@@ -431,13 +432,13 @@ const step = async (page, timedSegments, segmentIndex, action) => {
 const showProofScene = async (page, evidence) => {
   const proof = {
     status: evidence.status,
-    amount: `${evidence.amountUsd} USDC`,
-    network: evidence.networkName,
-    payer: shortHash(evidence.payer, 12, 8),
-    payTo: shortHash(evidence.payTo, 12, 8),
-    tx: shortHash(evidence.transactionHash, 16, 10),
-    txFull: evidence.transactionHash,
-    block: String(evidence.blockNumber),
+    amount: evidence.amountDisplay,
+    network: "Algorand Testnet",
+    payer: shortHash(evidence.buyer, 12, 8),
+    payTo: shortHash(evidence.seller, 12, 8),
+    tx: shortHash(evidence.transactionId, 16, 10),
+    txFull: evidence.transactionId,
+    block: String(evidence.confirmedRound),
     explorerUrl: evidence.explorerUrl,
   };
 
@@ -450,15 +451,15 @@ const showProofScene = async (page, evidence) => {
     scene.innerHTML = `
       <div class="proof-shell">
         <div class="proof-copy">
-          <span class="proof-eyebrow">Official x402 + OKX Wallet proof</span>
+          <span class="proof-eyebrow">x402 v2 + Pera Wallet + GoPlausible</span>
           <h1>Real settlement, not a mock receipt</h1>
-          <p>The buyer signed x402 EIP-712 typed data in OKX Wallet. The facilitator settled the request and returned an official receipt.</p>
+          <p>The buyer signed the request-bound AVM group in Pera Wallet. GoPlausible sponsored fees, settled USDC, and returned PAYMENT-RESPONSE.</p>
         </div>
         <div class="proof-grid">
           <div class="proof-card"><span>Status</span><strong></strong></div>
           <div class="proof-card"><span>Amount</span><strong></strong></div>
           <div class="proof-card"><span>Network</span><strong></strong></div>
-          <div class="proof-card"><span>Block</span><strong></strong></div>
+          <div class="proof-card"><span>Round</span><strong></strong></div>
         </div>
         <div class="proof-route">
           <div><span>Payer</span><code></code></div>
@@ -482,10 +483,7 @@ const showProofScene = async (page, evidence) => {
         padding: 48px 56px 120px;
         box-sizing: border-box;
         color: #f4fff8;
-        background:
-          radial-gradient(circle at 18% 16%, rgba(47, 83, 255, 0.32), transparent 34%),
-          radial-gradient(circle at 82% 28%, rgba(26, 177, 106, 0.24), transparent 36%),
-          linear-gradient(135deg, #101616 0%, #17231f 48%, #eef4ed 100%);
+        background: linear-gradient(135deg, #101616 0%, #17231f 60%, #274238 100%);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       #proof-scene .proof-shell {
@@ -625,7 +623,7 @@ const recordBrowserDemo = async (evidence, timedSegments) => {
     await step(page, timedSegments, 0);
     await step(page, timedSegments, 1, async () => {
       await page.getByRole("button", { name: "Verify official 402" }).click();
-      await page.locator(".status-card", { hasText: "Official x402 verified" }).waitFor({
+      await page.locator(".status-card", { hasText: "Algorand x402 verified" }).waitFor({
         timeout: 20_000,
       });
     });

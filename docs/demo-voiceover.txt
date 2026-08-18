@@ -1,19 +1,19 @@
-AgentPay Firewall turns autonomous agent payments into policy-controlled infrastructure.
+AgentPay Firewall is a pre-sign policy layer for autonomous agent payments.
 
-The public Vercel endpoint uses official x402 middleware. One click verifies HTTP 402 and decodes the x402 version two PAYMENT-REQUIRED challenge.
+The live Vercel endpoint runs x402 version two directly on Algorand Testnet. One click verifies the HTTP 402 PAYMENT-REQUIRED challenge.
 
-Agents can pay, but they still need rules. The user defines request caps, budgets, approved services, network, asset, risk score, and human approval.
+Agents can pay, but wallets still need rules. The owner defines request caps, budgets, approved services, network, asset, risk score, and human approval.
 
-First, the agent calls a paid wallet-risk API. The server returns an HTTP 402 challenge with PAYMENT-REQUIRED.
+First, the agent calls a paid wallet-risk API. The seller returns an x402 challenge for exactly 0.001 USDC.
 
-The firewall checks every gate. This request passes, so it signs, retries, and receives PAYMENT-RESPONSE.
+This simulation shows the approved path. Every policy gate passes before wallet authorization, then the paid request is retried and returns PAYMENT-RESPONSE.
 
-Now the unsafe path. A costly non-allowlisted crawl gets the same challenge, but policy fails before signing.
+Now the unsafe path. A costly non-allowlisted crawl receives a challenge, but policy fails before signing, so no payment authorization is created.
 
-A third request is allowed, but crosses the human approval threshold. The wallet pauses instead of silently spending.
+A third request uses an approved service but crosses the human approval threshold. The wallet pauses instead of silently spending.
 
-For the production path, the buyer key stays inside OKX Wallet. The app asks OKX to sign x402 typed data with eth_signTypedData_v4.
+In the real path, the buyer key stays inside Pera Wallet. GoPlausible sponsors the group fee and settles the signed Algorand payment.
 
-We reproduced that path on Base Sepolia. The facilitator settled 0.001 USDC and returned an official x402 receipt with an explorer transaction.
+This is the confirmed transaction. GoPlausible settled 0.001 USDC on Algorand Testnet and returned PAYMENT-RESPONSE with verifiable Lora evidence.
 
-So the project is not just another agent wallet. It is the control layer that decides when autonomous payments are safe to execute.
+AgentPay Firewall connects seller pricing, buyer-owned policy, wallet authorization, facilitator settlement, and an auditable onchain receipt.

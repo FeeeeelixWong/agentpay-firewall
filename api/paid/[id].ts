@@ -7,6 +7,7 @@ type PaymentNetwork =
   | "eip155:42161"
   | "eip155:480"
   | `eip155:${number}`
+  | `algorand:${string}`
   | `solana:${string}`;
 
 type PaymentRequirement = {
@@ -55,7 +56,7 @@ type SettlementResponse = {
   evidenceNote: string;
 };
 
-const demoAgentAddress = "0xA9eF111a9eF111A9Ef111A9Ef111A9eF111a9EF1";
+const demoAgentAddress = "25QHVX3LLUXIOHW7CRNRDDYMNZMVETYPGJIM66O2R2WZUMACHL2RDLRRBM";
 const demoSigningSeed = "agentpay-firewall-demo-signer";
 
 const sortObject = (value: unknown): unknown => {
@@ -156,6 +157,8 @@ const createSettlementResponse = (requirement: PaymentRequirement): SettlementRe
 };
 
 const nowPlusMinutes = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+const algorandTestnet = "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=" as const;
+const demoSeller = "U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA";
 
 const makeRequirement = (
   id: string,
@@ -171,10 +174,10 @@ const makeRequirement = (
 const scenarios = {
   "allowed-risk-scan": {
     requirement: makeRequirement("allowed-risk-scan", {
-      network: "eip155:8453",
+      network: algorandTestnet,
       asset: "USDC",
       amountUsd: 0.08,
-      payTo: "0xF1reWa11000000000000000000000000000000402",
+      payTo: demoSeller,
       resource: "https://risklabel.ai/api/wallet-score?address=demo",
       serviceName: "risklabel.ai",
       description: "Wallet risk score API call",
@@ -190,10 +193,10 @@ const scenarios = {
   },
   "blocked-crawl": {
     requirement: makeRequirement("blocked-crawl", {
-      network: "eip155:8453",
+      network: algorandTestnet,
       asset: "USDC",
       amountUsd: 2.75,
-      payTo: "0xC0st1y0000000000000000000000000000000402",
+      payTo: demoSeller,
       resource: "https://premium-crawl.example/api/large-crawl",
       serviceName: "premium-crawl.example",
       description: "Large web crawl package requested by autonomous agent",
@@ -209,10 +212,10 @@ const scenarios = {
   },
   "manual-market-data": {
     requirement: makeRequirement("manual-market-data", {
-      network: "eip155:8453",
+      network: algorandTestnet,
       asset: "USDC",
       amountUsd: 0.42,
-      payTo: "0xDa7a000000000000000000000000000000000402",
+      payTo: demoSeller,
       resource: "https://chainwatch.dev/api/liquidity-snapshot",
       serviceName: "chainwatch.dev",
       description: "One-time DEX liquidity snapshot for research agent",

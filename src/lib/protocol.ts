@@ -61,7 +61,7 @@ export type PaidApiResponse = {
   confidence: number;
 };
 
-export const DEMO_AGENT_ADDRESS = "0xA9eF111a9eF111A9Ef111A9Ef111A9eF111a9EF1";
+export const DEMO_AGENT_ADDRESS = "25QHVX3LLUXIOHW7CRNRDDYMNZMVETYPGJIM66O2R2WZUMACHL2RDLRRBM";
 const DEMO_SIGNING_SEED = "agentpay-firewall-demo-signer";
 
 const sortObject = (value: unknown): unknown => {

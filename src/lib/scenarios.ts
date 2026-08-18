@@ -1,5 +1,8 @@
 import { sha256, type PaidApiResponse, type PaymentRequirement } from "./protocol";
 
+const ALGORAND_TESTNET = "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=" as const;
+const DEMO_SELLER = "U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA";
+
 export type ScenarioId = "allowed-risk-scan" | "blocked-crawl" | "manual-market-data";
 
 export type Scenario = {
@@ -31,10 +34,10 @@ export const scenarios: Record<ScenarioId, Scenario> = {
     intent: "Research agent needs one wallet-risk label before answering a user.",
     resourcePath: "/api/paid/allowed-risk-scan",
     requirement: makeRequirement("allowed-risk-scan", {
-      network: "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+      network: ALGORAND_TESTNET,
       asset: "USDC",
       amountUsd: 0.08,
-      payTo: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+      payTo: DEMO_SELLER,
       resource: "https://risklabel.ai/api/wallet-score?address=demo",
       serviceName: "risklabel.ai",
       description: "Wallet risk score API call",
@@ -54,10 +57,10 @@ export const scenarios: Record<ScenarioId, Scenario> = {
     intent: "Agent tries to buy an expensive data crawl outside the allowlist.",
     resourcePath: "/api/paid/blocked-crawl",
     requirement: makeRequirement("blocked-crawl", {
-      network: "eip155:8453",
+      network: ALGORAND_TESTNET,
       asset: "USDC",
       amountUsd: 2.75,
-      payTo: "0xC0st1y0000000000000000000000000000000402",
+      payTo: DEMO_SELLER,
       resource: "https://premium-crawl.example/api/large-crawl",
       serviceName: "premium-crawl.example",
       description: "Large web crawl package requested by autonomous agent",
@@ -77,10 +80,10 @@ export const scenarios: Record<ScenarioId, Scenario> = {
     intent: "Agent finds a useful market-data endpoint, but the amount crosses the approval line.",
     resourcePath: "/api/paid/manual-market-data",
     requirement: makeRequirement("manual-market-data", {
-      network: "eip155:8453",
+      network: ALGORAND_TESTNET,
       asset: "USDC",
       amountUsd: 0.42,
-      payTo: "0xDa7a000000000000000000000000000000000402",
+      payTo: DEMO_SELLER,
       resource: "https://chainwatch.dev/api/liquidity-snapshot",
       serviceName: "chainwatch.dev",
       description: "One-time DEX liquidity snapshot for research agent",
