@@ -1,982 +1,410 @@
-import {
-  Activity,
-  AlertTriangle,
-  BadgeCheck,
-  CheckCircle2,
-  ClipboardCheck,
-  Clock3,
-  ExternalLink,
-  LockKeyhole,
-  Play,
-  RefreshCcw,
-  Server,
-  ShieldCheck,
-  ShieldX,
-  WalletCards,
-  XCircle,
-} from "lucide-react";
 import { useWallet } from "@txnlab/use-wallet-react";
-import { useMemo, useState } from "react";
+import { isValidAddress } from "algosdk";
 import {
-  createSettlementResponse,
-  createPaymentPayload,
-  decodeBase64Json,
-  encodeBase64Json,
-  shortHash,
-  type PaidApiResponse,
-  type PaymentPayload,
-  type PaymentRequirement,
-  type SettlementResponse,
-} from "./lib/protocol";
+  ArrowLeft,
+  ArrowRight,
+  BadgeCheck,
+  Check,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  FileLock2,
+  Link2,
+  LoaderCircle,
+  LockKeyhole,
+  ReceiptText,
+  RefreshCcw,
+  Send,
+  ShieldCheck,
+  Store,
+  WalletCards,
+} from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import type {
+  PaymentLinkError,
+  PaymentLinkInput,
+  PaymentLinkResponse,
+} from "./lib/payment-links";
+import { shortHash } from "./lib/protocol";
 import {
-  defaultPolicy,
-  evaluatePayment,
-  type AgentPolicy,
-  type PolicyDecision,
-} from "./lib/policy";
-import { scenarios, type ScenarioId } from "./lib/scenarios";
-import {
-  ALGORAND_TESTNET_NETWORK,
+  ALGORAND_TESTNET_LORA_URL,
+  DEFAULT_ALGORAND_PAY_TO,
   GOPLAUSIBLE_FACILITATOR_URL,
-  HOSTED_ALGORAND_X402_RESOURCE_URL,
-  VERIFIED_ALGORAND_SETTLEMENT_URL,
 } from "./lib/x402-algorand";
 
-type StageState = "pending" | "active" | "done" | "blocked" | "error" | "review";
-
-type FlowStage = {
-  id: string;
-  label: string;
-  description: string;
-  state: StageState;
-};
-
-type AuditEvent = {
-  id: string;
-  time: string;
-  title: string;
-  detail: string;
-  status: "approved" | "blocked" | "settled" | "review" | "info";
-};
-
-type RunResult = {
-  requirement?: PaymentRequirement;
-  decision?: PolicyDecision;
-  payload?: PaymentPayload;
-  settlement?: SettlementResponse;
-  apiResult?: PaidApiResponse;
-  paymentRequiredHeader?: string;
-  paymentSignatureHeader?: string;
-  paymentResponseHeader?: string;
-  transport?: "server" | "browser-sim" | "official-challenge" | "algorand-wallet";
-};
-
-const initialStages: FlowStage[] = [
-  {
-    id: "challenge",
-    label: "Challenge",
-    description: "Resource returns HTTP 402 with PAYMENT-REQUIRED.",
-    state: "pending",
-  },
-  {
-    id: "policy",
-    label: "Policy check",
-    description: "Wallet checks budget, allowlist, network, asset, and risk.",
-    state: "pending",
-  },
-  {
-    id: "sign",
-    label: "Sign",
-    description: "Agent signer creates PAYMENT-SIGNATURE only if allowed.",
-    state: "pending",
-  },
-  {
-    id: "retry",
-    label: "Retry",
-    description: "Client retries the paid API call with the signed payload.",
-    state: "pending",
-  },
-  {
-    id: "settle",
-    label: "Settle",
-    description: "Server verifies, settles, and returns PAYMENT-RESPONSE.",
-    state: "pending",
-  },
-];
-
-const statusIcon = {
-  pending: Clock3,
-  active: Activity,
-  done: CheckCircle2,
-  blocked: ShieldX,
-  error: XCircle,
-  review: AlertTriangle,
-};
-
-const statusLabel = {
-  pending: "Pending",
-  active: "Running",
-  done: "Done",
-  blocked: "Blocked",
-  error: "Error",
-  review: "Review",
-};
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("en-US", {
+const formatUsd = (amount: string | number) => {
+  const value = Number(amount);
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: amount > 0 && amount < 0.01 ? 3 : 2,
-    maximumFractionDigits: amount > 0 && amount < 0.01 ? 6 : 2,
-  }).format(amount);
-
-const formatPolicyCheckDetail = (label: string, detail: string) =>
-  label === "Network" && detail === ALGORAND_TESTNET_NETWORK
-    ? "Algorand Testnet"
-    : detail;
-
-const now = () =>
-  new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(new Date());
-
-const updateStage = (stages: FlowStage[], id: string, state: StageState) =>
-  stages.map((stage) => (stage.id === id ? { ...stage, state } : stage));
-
-const resetFrom = (stages: FlowStage[], activeId: string) => {
-  const activeIndex = stages.findIndex((stage) => stage.id === activeId);
-
-  return stages.map((stage, index) =>
-    index > activeIndex ? { ...stage, state: "pending" as StageState } : stage,
-  );
+    minimumFractionDigits: value > 0 && value < 0.01 ? 3 : 2,
+    maximumFractionDigits: 6,
+  }).format(value);
 };
 
-const defaultOfficialX402TargetUrl =
-  (import.meta as ImportMeta & { env?: { VITE_ALGORAND_X402_TARGET_URL?: string } }).env
-    ?.VITE_ALGORAND_X402_TARGET_URL ?? HOSTED_ALGORAND_X402_RESOURCE_URL;
+const messageFromResponse = async (response: Response) => {
+  try {
+    const body = (await response.json()) as Partial<PaymentLinkError>;
+    return body.message || body.error || `Request failed with ${response.status}.`;
+  } catch {
+    return `Request failed with ${response.status}.`;
+  }
+};
 
-function App() {
-  const { activeAddress, availableWallets, signTransactions } = useWallet();
-  const [policy, setPolicy] = useState<AgentPolicy>(defaultPolicy);
-  const [stages, setStages] = useState<FlowStage[]>(initialStages);
-  const [activeScenario, setActiveScenario] = useState<ScenarioId>("allowed-risk-scan");
-  const [result, setResult] = useState<RunResult>({});
-  const [auditLog, setAuditLog] = useState<AuditEvent[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
+const copyText = async (value: string) => navigator.clipboard.writeText(value);
+
+function BrandHeader({ buyer = false }: { buyer?: boolean }) {
+  return (
+    <header className="site-header">
+      <a className="brand" href="/" aria-label="AgentPay Firewall home">
+        <span className="brand-mark" aria-hidden="true"><ShieldCheck /></span>
+        <span><strong>AgentPay</strong><small>Firewall</small></span>
+      </a>
+      <nav className="site-nav" aria-label="Primary navigation">
+        <a className={!buyer ? "active" : undefined} href="/"><Store />Seller</a>
+        <a className={buyer ? "active" : undefined} href="/pay"><WalletCards />Buyer</a>
+      </nav>
+    </header>
+  );
+}
+
+function ProductFooter() {
+  return (
+    <footer className="site-footer">
+      <span>AgentPay Firewall</span>
+      <span>Algorand Testnet · USDC · x402</span>
+      <a href="https://github.com/FeeeeelixWong/agentpay-firewall" target="_blank" rel="noreferrer">
+        Source <ExternalLink />
+      </a>
+    </footer>
+  );
+}
+
+function SellerPage() {
+  const [form, setForm] = useState<PaymentLinkInput>({
+    amountUsd: "0.001",
+    payTo: DEFAULT_ALGORAND_PAY_TO,
+    title: "Agent service payment",
+    description: "Payment for the completed agent task.",
+  });
+  const [result, setResult] = useState<PaymentLinkResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const officialTargetUrl = defaultOfficialX402TargetUrl;
+  const [isCreating, setIsCreating] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const selectedScenario = scenarios[activeScenario];
-  const remainingBudget = Math.max(policy.dailyBudgetUsd - policy.spentTodayUsd, 0);
+  const formIsValid = useMemo(() => {
+    const amount = Number(form.amountUsd);
+    return amount > 0 && amount <= 10_000 && isValidAddress(form.payTo.trim());
+  }, [form.amountUsd, form.payTo]);
 
-  const stageSummary = useMemo(() => {
-    const completed = stages.filter((stage) => stage.state === "done").length;
-    const blocked = stages.some((stage) => stage.state === "blocked");
-    const review = stages.some((stage) => stage.state === "review");
-
-    if (blocked) return "Blocked before signing";
-    if (review) return "Waiting for human approval";
-    if (completed === stages.length) return "Payment settled";
-    if (result.transport === "official-challenge" && completed >= 2) {
-      return "Algorand x402 verified";
-    }
-    if (isRunning) return "Running x402 flow";
-    return "Ready";
-  }, [isRunning, result.transport, stages]);
-
-  const addAuditEvent = (event: Omit<AuditEvent, "id" | "time">) => {
-    setAuditLog((events) => [
-      {
-        ...event,
-        id: `${Date.now()}-${events.length}`,
-        time: now(),
-      },
-      ...events,
-    ]);
-  };
-
-  const patchPolicy = (patch: Partial<AgentPolicy>) => {
-    setPolicy((current) => ({ ...current, ...patch }));
-  };
-
-  const runScenario = async (scenarioId: ScenarioId) => {
-    const scenario = scenarios[scenarioId];
-    setActiveScenario(scenarioId);
+  const patchForm = (patch: Partial<PaymentLinkInput>) => {
+    setForm((current) => ({ ...current, ...patch }));
+    setResult(null);
     setError(null);
-    setResult({});
-    setStages(initialStages.map((stage) => ({ ...stage, state: "pending" })));
-    setIsRunning(true);
+  };
 
+  const createLink = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!formIsValid) {
+      setError("Enter a positive amount and a valid Algorand receiving address.");
+      return;
+    }
+
+    setIsCreating(true);
+    setError(null);
     try {
-      setStages((current) => updateStage(current, "challenge", "active"));
-      let transport: RunResult["transport"] = "server";
-      let paymentRequiredHeader: string | undefined;
-      let requirement: PaymentRequirement;
+      const response = await fetch("/api/payment-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!response.ok) throw new Error(await messageFromResponse(response));
+      setResult((await response.json()) as PaymentLinkResponse);
+    } catch (creationError) {
+      setError(creationError instanceof Error ? creationError.message : "Payment link creation failed.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
+  const copyPaymentLink = async () => {
+    if (!result) return;
+    await copyText(result.paymentUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <div className="app-page">
+      <BrandHeader />
+      <main className="seller-main">
+        <section className="seller-intro">
+          <p className="eyebrow"><BadgeCheck /> Seller checkout</p>
+          <h1>Create a payment link</h1>
+          <p>Set the amount and receiving wallet once. Share one protected link with your buyer.</p>
+          <ol className="flow-summary" aria-label="Seller payment flow">
+            <li className="current"><span>1</span><div><strong>Set terms</strong><small>Amount and wallet</small></div></li>
+            <li><span>2</span><div><strong>Share link</strong><small>Signed and tamper-proof</small></div></li>
+            <li><span>3</span><div><strong>Get paid</strong><small>Onchain receipt</small></div></li>
+          </ol>
+        </section>
+
+        <section className="seller-workspace" aria-label="Create a payment link">
+          <form className="payment-form" onSubmit={createLink}>
+            <div className="section-title">
+              <div><span>1</span><h2>Payment details</h2></div>
+              <p>Buyer sees these details before connecting a wallet.</p>
+            </div>
+
+            <label className="field-label" htmlFor="title">Payment title</label>
+            <input id="title" value={form.title} maxLength={80} onChange={(event) => patchForm({ title: event.target.value })} placeholder="Agent service payment" />
+
+            <div className="field-grid">
+              <div>
+                <label className="field-label" htmlFor="amount">Amount</label>
+                <div className="amount-input">
+                  <span>$</span>
+                  <input id="amount" type="number" min="0.000001" max="10000" step="0.000001" inputMode="decimal" value={form.amountUsd} onChange={(event) => patchForm({ amountUsd: event.target.value })} />
+                  <strong>USDC</strong>
+                </div>
+              </div>
+              <div>
+                <label className="field-label" htmlFor="network">Network</label>
+                <div className="readonly-field" id="network"><span className="network-dot" />Algorand Testnet</div>
+              </div>
+            </div>
+
+            <label className="field-label" htmlFor="pay-to">Receiving address</label>
+            <input id="pay-to" className="mono-input" value={form.payTo} onChange={(event) => patchForm({ payTo: event.target.value })} spellCheck="false" aria-describedby="address-help" />
+            <p id="address-help" className={`field-help ${form.payTo && !isValidAddress(form.payTo.trim()) ? "invalid" : ""}`}>
+              {form.payTo && !isValidAddress(form.payTo.trim()) ? "This is not a valid Algorand address." : "USDC will settle directly to this wallet."}
+            </p>
+
+            <label className="field-label" htmlFor="description">Description <span>Optional</span></label>
+            <textarea id="description" rows={3} maxLength={240} value={form.description} onChange={(event) => patchForm({ description: event.target.value })} placeholder="What is this payment for?" />
+
+            {error && <div className="form-error" role="alert">{error}</div>}
+
+            <button className="primary-button" type="submit" disabled={!formIsValid || isCreating}>
+              {isCreating ? <LoaderCircle className="spin" /> : <Link2 />}
+              {isCreating ? "Creating link" : "Create payment link"}
+              {!isCreating && <ArrowRight />}
+            </button>
+            <p className="submit-note"><LockKeyhole /> Link terms expire in 7 days and cannot be edited after creation.</p>
+          </form>
+
+          <aside className="link-output" aria-live="polite">
+            <div className="section-title">
+              <div><span>2</span><h2>Share with buyer</h2></div>
+              <p>Only the person with this link can open the checkout.</p>
+            </div>
+
+            {!result ? (
+              <div className="output-empty">
+                <span><Send /></span>
+                <h3>Your payment link will appear here</h3>
+                <p>Review the payment terms, then create a secure checkout.</p>
+              </div>
+            ) : (
+              <div className="output-ready">
+                <div className="success-heading"><CheckCircle2 /><div><strong>Link ready</strong><small>Expires {new Date(result.request.expiresAt).toLocaleDateString()}</small></div></div>
+                <div className="payment-preview"><small>Buyer pays</small><strong>{formatUsd(result.request.amountUsd)}</strong><span>USDC on Algorand Testnet</span></div>
+                <label className="field-label" htmlFor="generated-link">Payment link</label>
+                <div className="generated-link">
+                  <input id="generated-link" readOnly value={result.paymentUrl} />
+                  <button type="button" onClick={copyPaymentLink} aria-label="Copy payment link">{copied ? <Check /> : <Copy />}</button>
+                </div>
+                <div className="output-actions">
+                  <button type="button" className="secondary-button" onClick={copyPaymentLink}><Copy />{copied ? "Copied" : "Copy link"}</button>
+                  <a className="primary-link" href={result.paymentUrl} target="_blank" rel="noreferrer">Open checkout <ExternalLink /></a>
+                </div>
+                <div className="integrity-note"><FileLock2 /><p><strong>Terms are signed.</strong><br />Changing the amount or recipient invalidates the link.</p></div>
+              </div>
+            )}
+          </aside>
+        </section>
+
+        <section className="trust-strip" aria-label="Payment infrastructure">
+          <div><ShieldCheck /><span><strong>Signed request</strong><small>HMAC protected terms</small></span></div>
+          <div><WalletCards /><span><strong>Non-custodial</strong><small>Buyer signs in Pera</small></span></div>
+          <div><ReceiptText /><span><strong>Onchain receipt</strong><small>GoPlausible settlement</small></span></div>
+        </section>
+      </main>
+      <ProductFooter />
+    </div>
+  );
+}
+
+type CheckoutState = "loading" | "empty" | "ready" | "paying" | "success" | "error";
+
+function BuyerPage() {
+  const { activeAddress, availableWallets, signTransactions } = useWallet();
+  const token = new URLSearchParams(window.location.search).get("request") ?? "";
+  const [paymentLink, setPaymentLink] = useState<PaymentLinkResponse | null>(null);
+  const [state, setState] = useState<CheckoutState>(token ? "loading" : "empty");
+  const [error, setError] = useState<string | null>(null);
+  const [transaction, setTransaction] = useState<string | null>(null);
+  const [pasteValue, setPasteValue] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    const controller = new AbortController();
+    void (async () => {
       try {
-        if (window.location.hostname.endsWith("github.io")) {
-          throw new Error("Static GitHub Pages host");
-        }
-
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 2_000);
-        const challengeResponse = await fetch(scenario.resourcePath, {
-          signal: controller.signal,
-        });
-        window.clearTimeout(timeoutId);
-
-        if (challengeResponse.status !== 402) {
-          throw new Error(`Expected a 402 challenge but received ${challengeResponse.status}.`);
-        }
-
-        paymentRequiredHeader = challengeResponse.headers.get("PAYMENT-REQUIRED") ?? undefined;
-
-        if (!paymentRequiredHeader) {
-          throw new Error("Missing PAYMENT-REQUIRED header from paid resource.");
-        }
-
-        requirement = decodeBase64Json<PaymentRequirement>(paymentRequiredHeader);
-      } catch {
-        transport = "browser-sim";
-        requirement = scenario.requirement;
-        paymentRequiredHeader = encodeBase64Json(requirement);
+        const response = await fetch(`/api/payment-links?request=${encodeURIComponent(token)}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(await messageFromResponse(response));
+        setPaymentLink((await response.json()) as PaymentLinkResponse);
+        setState("ready");
+      } catch (loadError) {
+        if (controller.signal.aborted) return;
+        setError(loadError instanceof Error ? loadError.message : "This payment link is invalid.");
+        setState("error");
       }
+    })();
+    return () => controller.abort();
+  }, [token]);
 
-      setResult({ requirement, paymentRequiredHeader, transport });
-      setStages((current) => updateStage(current, "challenge", "done"));
-
-      setStages((current) => updateStage(current, "policy", "active"));
-      const decision = evaluatePayment(requirement, policy);
-      setResult((current) => ({ ...current, decision }));
-
-      if (decision.status === "blocked") {
-        setStages((current) =>
-          resetFrom(updateStage(updateStage(current, "policy", "blocked"), "sign", "blocked"), "sign"),
-        );
-        addAuditEvent({
-          title: "Payment blocked",
-          detail: `${requirement.serviceName} requested ${formatCurrency(requirement.amountUsd)}. ${decision.reason}`,
-          status: "blocked",
-        });
-        return;
-      }
-
-      if (decision.status === "manual_review") {
-        setStages((current) =>
-          resetFrom(updateStage(updateStage(current, "policy", "review"), "sign", "review"), "sign"),
-        );
-        addAuditEvent({
-          title: "Manual approval required",
-          detail: `${requirement.serviceName} requested ${formatCurrency(requirement.amountUsd)}. ${decision.reason}`,
-          status: "review",
-        });
-        return;
-      }
-
-      setStages((current) => updateStage(current, "policy", "done"));
-
-      setStages((current) => updateStage(current, "sign", "active"));
-      const payload = createPaymentPayload(requirement, decision.id);
-      const paymentSignatureHeader = encodeBase64Json(payload);
-      setResult((current) => ({ ...current, payload, paymentSignatureHeader }));
-      setStages((current) => updateStage(current, "sign", "done"));
-
-      setStages((current) => updateStage(current, "retry", "active"));
-      let paymentResponseHeader: string | undefined;
-      let settlement: SettlementResponse;
-      let apiResult: PaidApiResponse;
-
-      if (transport === "browser-sim") {
-        setStages((current) => updateStage(current, "retry", "done"));
-        setStages((current) => updateStage(current, "settle", "active"));
-        settlement = createSettlementResponse(requirement);
-        paymentResponseHeader = encodeBase64Json(settlement);
-        apiResult = scenario.result;
-      } else {
-        const paidResponse = await fetch(scenario.resourcePath, {
-          headers: {
-            "PAYMENT-SIGNATURE": paymentSignatureHeader,
-          },
-        });
-        setStages((current) => updateStage(current, "retry", paidResponse.ok ? "done" : "error"));
-
-        if (!paidResponse.ok) {
-          throw new Error(`Paid retry failed with ${paidResponse.status}.`);
-        }
-
-        setStages((current) => updateStage(current, "settle", "active"));
-        paymentResponseHeader = paidResponse.headers.get("PAYMENT-RESPONSE") ?? undefined;
-
-        if (!paymentResponseHeader) {
-          throw new Error("Missing PAYMENT-RESPONSE header after paid retry.");
-        }
-
-        const body = (await paidResponse.json()) as {
-          data: PaidApiResponse;
-          receipt: SettlementResponse;
-        };
-        settlement = decodeBase64Json<SettlementResponse>(paymentResponseHeader);
-        apiResult = body.data;
-      }
-
-      setResult((current) => ({
-        ...current,
-        apiResult,
-        settlement,
-        paymentResponseHeader,
-      }));
-      setPolicy((current) => ({
-        ...current,
-        spentTodayUsd: Number((current.spentTodayUsd + requirement.amountUsd).toFixed(2)),
-      }));
-      setStages((current) => updateStage(current, "settle", "done"));
-      addAuditEvent({
-        title: transport === "browser-sim" ? "Payment simulated" : "Payment settled",
-        detail: `${requirement.serviceName} ${transport === "browser-sim" ? "simulated" : "settled"} ${formatCurrency(requirement.amountUsd)} with receipt ${shortHash(settlement.txHash)}.`,
-        status: "settled",
-      });
-    } catch (runError) {
-      const message = runError instanceof Error ? runError.message : "Unknown flow error";
-      setError(message);
-      setStages((current) => {
-        const active = current.find((stage) => stage.state === "active");
-        return active ? updateStage(current, active.id, "error") : current;
-      });
-      addAuditEvent({
-        title: "Flow failed",
-        detail: message,
-        status: "blocked",
-      });
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
-  const verifyOfficialX402Challenge = async () => {
-    setActiveScenario("allowed-risk-scan");
-    setError(null);
-    setResult({});
-    setStages(initialStages.map((stage) => ({ ...stage, state: "pending" })));
-    setIsRunning(true);
-
-    try {
-      const { fetchOfficialX402Challenge } = await import("./lib/okx-wallet");
-
-      setStages((current) => updateStage(current, "challenge", "active"));
-      const challenge = await fetchOfficialX402Challenge(officialTargetUrl);
-      setResult({
-        requirement: challenge.requirement,
-        paymentRequiredHeader: challenge.header,
-        transport: "official-challenge",
-      });
-      setStages((current) => updateStage(current, "challenge", "done"));
-
-      setStages((current) => updateStage(current, "policy", "active"));
-      const decision = evaluatePayment(challenge.requirement, policy);
-      setResult((current) => ({ ...current, decision }));
-
-      if (decision.status !== "approved") {
-        const state = decision.status === "blocked" ? "blocked" : "review";
-        setStages((current) => updateStage(current, "policy", state));
-        throw new Error(`Official challenge did not pass policy: ${decision.reason}`);
-      }
-
-      setStages((current) => updateStage(current, "policy", "done"));
-      addAuditEvent({
-        title: "Official x402 challenge verified",
-        detail: `Decoded x402 v${challenge.paymentRequired.x402Version} exact payment on ${challenge.requirement.network} for ${formatCurrency(challenge.requirement.amountUsd)}.`,
-        status: "approved",
-      });
-    } catch (runError) {
-      const message =
-        runError instanceof Error ? runError.message : "Unknown official x402 verification error";
-      setError(message);
-      setStages((current) => {
-        const active = current.find((stage) => stage.state === "active");
-        return active ? updateStage(current, active.id, "error") : current;
-      });
-      addAuditEvent({
-        title: "Official x402 verification failed",
-        detail: message,
-        status: "blocked",
-      });
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
-  const connectPeraWallet = async () => {
-    const peraWallet = availableWallets.find((wallet) => wallet.id === "pera");
-
-    if (!peraWallet) {
+  const connectWallet = async () => {
+    const wallet = availableWallets.find((candidate) => candidate.id === "pera");
+    if (!wallet) {
       setError("Pera Wallet is not available in this browser.");
       return;
     }
-
-    setError(null);
-    setIsRunning(true);
     try {
-      await peraWallet.connect();
-      addAuditEvent({
-        title: "Pera Wallet connected",
-        detail: "Algorand Testnet wallet session is ready for policy-gated x402 signing.",
-        status: "info",
-      });
-    } catch (connectError) {
-      const message = connectError instanceof Error ? connectError.message : "Wallet connection failed";
-      setError(message);
-    } finally {
-      setIsRunning(false);
+      setError(null);
+      await wallet.connect();
+    } catch (walletError) {
+      setError(walletError instanceof Error ? walletError.message : "Wallet connection failed.");
     }
   };
 
-  const runAlgorandWalletPayment = async () => {
-    if (!activeAddress) {
-      await connectPeraWallet();
-      return;
-    }
-
-    setActiveScenario("allowed-risk-scan");
+  const pay = async () => {
+    if (!paymentLink || !activeAddress) return;
+    setState("paying");
     setError(null);
-    setResult({});
-    setStages(initialStages.map((stage) => ({ ...stage, state: "pending" })));
-    setIsRunning(true);
-
     try {
       const { fetchOfficialX402Challenge } = await import("./lib/okx-wallet");
       const { payOfficialX402WithAlgorandWallet } = await import("./lib/algorand-wallet");
+      const challenge = await fetchOfficialX402Challenge(paymentLink.resourceUrl);
 
-      setStages((current) => updateStage(current, "challenge", "active"));
-      const challenge = await fetchOfficialX402Challenge(officialTargetUrl);
-      setResult({
-        requirement: challenge.requirement,
-        paymentRequiredHeader: challenge.header,
-        transport: "algorand-wallet",
-      });
-      setStages((current) => updateStage(current, "challenge", "done"));
-
-      setStages((current) => updateStage(current, "policy", "active"));
-      const decision = evaluatePayment(challenge.requirement, policy);
-      setResult((current) => ({ ...current, decision }));
-
-      if (decision.status !== "approved") {
-        const state = decision.status === "blocked" ? "blocked" : "review";
-        setStages((current) => updateStage(current, "policy", state));
-        addAuditEvent({
-          title: "Algorand payment not signed",
-          detail: decision.reason,
-          status: decision.status === "blocked" ? "blocked" : "review",
-        });
-        return;
+      if (challenge.requirement.payTo !== paymentLink.request.payTo) {
+        throw new Error("Security check failed: the x402 recipient does not match this payment link.");
+      }
+      if (Math.abs(challenge.requirement.amountUsd - Number(paymentLink.request.amountUsd)) > 0.0000001) {
+        throw new Error("Security check failed: the x402 amount does not match this payment link.");
       }
 
-      setStages((current) => updateStage(current, "policy", "done"));
-      setStages((current) => updateStage(current, "sign", "active"));
       const paid = await payOfficialX402WithAlgorandWallet({
-        targetUrl: officialTargetUrl,
+        targetUrl: paymentLink.resourceUrl,
         address: activeAddress,
         signTransactions,
         amountUsd: challenge.requirement.amountUsd,
       });
-      setStages((current) => updateStage(current, "sign", "done"));
-      setStages((current) => updateStage(current, "retry", "done"));
-      setStages((current) => updateStage(current, "settle", "done"));
-      setResult((current) => ({
-        ...current,
-        paymentResponseHeader: paid.paymentResponseHeader,
-        settlement: paid.settlement,
-        apiResult: paid.apiResult,
-      }));
-      setPolicy((current) => ({
-        ...current,
-        spentTodayUsd: Number((current.spentTodayUsd + challenge.requirement.amountUsd).toFixed(3)),
-      }));
-      addAuditEvent({
-        title: "Algorand x402 payment settled",
-        detail: `${shortHash(activeAddress, 10, 6)} paid ${formatCurrency(challenge.requirement.amountUsd)} through GoPlausible. Transaction: ${shortHash(paid.settlement.txHash)}.`,
-        status: "settled",
-      });
+      setTransaction(paid.settlement.txHash);
+      setState("success");
     } catch (paymentError) {
-      const message = paymentError instanceof Error ? paymentError.message : "Algorand payment failed";
-      setError(message);
-      setStages((current) => {
-        const active = current.find((stage) => stage.state === "active");
-        return active ? updateStage(current, active.id, "error") : current;
-      });
-      addAuditEvent({
-        title: "Algorand x402 payment failed",
-        detail: message,
-        status: "blocked",
-      });
-    } finally {
-      setIsRunning(false);
+      setError(paymentError instanceof Error ? paymentError.message : "Payment failed.");
+      setState("ready");
     }
   };
 
-  const resetDemo = () => {
-    setPolicy(defaultPolicy);
-    setStages(initialStages.map((stage) => ({ ...stage, state: "pending" })));
-    setResult({});
-    setAuditLog([]);
-    setError(null);
-    setActiveScenario("allowed-risk-scan");
+  const openPastedLink = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      const parsed = new URL(pasteValue);
+      const request = parsed.searchParams.get("request");
+      if (!request) throw new Error("No payment request was found in this link.");
+      window.location.assign(`/pay?request=${encodeURIComponent(request)}`);
+    } catch (pasteError) {
+      setError(pasteError instanceof Error ? pasteError.message : "Enter a valid AgentPay link.");
+    }
   };
 
+  const request = paymentLink?.request;
+  const isPaying = state === "paying";
+
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Brainwave 2026 · Algorand x402 final build</p>
-          <h1>AgentPay Firewall</h1>
-          <p className="lede">
-            Give AI agents a payment mandate, not unlimited wallet access. Every x402 request is
-            checked before the wallet signs.
-          </p>
-        </div>
-        <div className="status-card" aria-live="polite">
-          <span className="status-dot" aria-hidden="true" />
-          <span>{stageSummary}</span>
-        </div>
-      </header>
+    <div className="app-page checkout-page">
+      <BrandHeader buyer />
+      <main className="buyer-main">
+        <a className="back-link" href="/"><ArrowLeft /> Seller workspace</a>
 
-      <section className="proof-panel" aria-label="Official x402 integration proof">
-        <div className="proof-copy">
-          <div className="proof-kicker">
-            <BadgeCheck aria-hidden="true" />
-            <span>Official x402 endpoint live</span>
-          </div>
-          <h2>Verify the protocol before testing the policy</h2>
-          <p>
-            The hosted resource uses <code>@x402/express</code> and <code>@x402/avm</code>. It
-            returns a standard v2 challenge, accepts exact USDC on Algorand Testnet, and routes
-            verification and settlement through GoPlausible.
-          </p>
-          <div className="proof-meta" aria-label="Official x402 configuration">
-            <span>x402 v2</span>
-            <span>Exact AVM</span>
-            <span>Algorand Testnet</span>
-            <span>0.001 USDC</span>
-          </div>
-          <a
-            className="endpoint-link"
-            href={officialTargetUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Server aria-hidden="true" />
-            {officialTargetUrl}
-          </a>
-        </div>
+        {state === "empty" && (
+          <section className="checkout-shell empty-checkout">
+            <span className="checkout-icon"><Link2 /></span>
+            <h1>Open a payment link</h1>
+            <p>Paste the AgentPay link shared by your seller to review and pay.</p>
+            <form onSubmit={openPastedLink}>
+              <label className="field-label" htmlFor="paste-link">Payment link</label>
+              <input id="paste-link" value={pasteValue} onChange={(event) => setPasteValue(event.target.value)} placeholder="https://agentpay-firewall.vercel.app/pay?request=..." />
+              {error && <div className="form-error" role="alert">{error}</div>}
+              <button className="primary-button" type="submit" disabled={!pasteValue.trim()}>Open checkout <ArrowRight /></button>
+            </form>
+          </section>
+        )}
 
-        <div className="proof-actions">
-          <button
-            type="button"
-            className="proof-primary"
-            onClick={verifyOfficialX402Challenge}
-            disabled={isRunning}
-          >
-            <Server aria-hidden="true" />
-            {isRunning ? "Verifying" : "Verify official 402"}
-          </button>
-          <button
-            type="button"
-            className="proof-secondary"
-            onClick={runAlgorandWalletPayment}
-            disabled={isRunning}
-          >
-            <WalletCards aria-hidden="true" />
-            {activeAddress ? "Pay 0.001 USDC" : "Connect Pera Wallet"}
-          </button>
-          <a
-            className="proof-receipt-link"
-            href={VERIFIED_ALGORAND_SETTLEMENT_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <ExternalLink aria-hidden="true" />
-            View settled x402 payment
-          </a>
-          <p className="proof-wallet-status">
-            {activeAddress
-              ? `Pera Testnet: ${shortHash(activeAddress, 10, 6)}`
-              : `Payments settle through ${new URL(GOPLAUSIBLE_FACILITATOR_URL).hostname}.`}
-          </p>
-        </div>
-      </section>
+        {state === "loading" && (
+          <section className="checkout-shell checkout-loading" aria-label="Loading payment request">
+            <LoaderCircle className="spin" /><h1>Verifying payment link</h1><p>Checking the seller's signed payment terms.</p>
+          </section>
+        )}
 
-      <section className="workspace-grid" aria-label="AgentPay Firewall demo">
-        <aside className="panel policy-panel">
-          <div className="section-heading">
-            <ShieldCheck aria-hidden="true" />
-            <div>
-              <h2>Policy Wallet</h2>
-              <p>Rules the agent must pass before it can sign.</p>
+        {state === "error" && (
+          <section className="checkout-shell empty-checkout">
+            <span className="checkout-icon error-icon"><FileLock2 /></span>
+            <h1>Payment link unavailable</h1>
+            <p>{error || "This link is invalid or has expired."}</p>
+            <a className="secondary-link" href="/pay"><RefreshCcw /> Try another link</a>
+          </section>
+        )}
+
+        {request && state !== "success" && (
+          <section className="checkout-shell">
+            <div className="checkout-status"><LockKeyhole /><span>Verified seller request</span></div>
+            <div className="checkout-heading">
+              <div className="merchant-mark"><Store /></div>
+              <div><small>Payment to</small><h1>{request.title}</h1><p>{request.description || "Secure x402 payment request"}</p></div>
             </div>
-          </div>
-
-          <div className="metric-row">
-            <div>
-              <span>Spent today</span>
-              <strong>{formatCurrency(policy.spentTodayUsd)}</strong>
-            </div>
-            <div>
-              <span>Remaining</span>
-              <strong>{formatCurrency(remainingBudget)}</strong>
-            </div>
-          </div>
-
-          <div className="form-stack">
-            <label>
-              <span>Max per request</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={policy.maxPerRequestUsd}
-                onChange={(event) =>
-                  patchPolicy({ maxPerRequestUsd: Number(event.currentTarget.value) })
-                }
-              />
-            </label>
-            <label>
-              <span>Daily budget</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={policy.dailyBudgetUsd}
-                onChange={(event) =>
-                  patchPolicy({ dailyBudgetUsd: Number(event.currentTarget.value) })
-                }
-              />
-            </label>
-            <label>
-              <span>Human approval above</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={policy.manualApprovalAboveUsd}
-                onChange={(event) =>
-                  patchPolicy({ manualApprovalAboveUsd: Number(event.currentTarget.value) })
-                }
-              />
-            </label>
-          </div>
-
-          <div className="token-list" aria-label="Allowed services">
-            {policy.allowedServices.map((service) => (
-              <span key={service}>{service}</span>
-            ))}
-          </div>
-
-          <div className="guardrail-note">
-            <LockKeyhole aria-hidden="true" />
-            <p>
-              The wallet blocks before signing. The paid API never receives a signature when policy
-              fails.
-            </p>
-          </div>
-        </aside>
-
-        <section className="panel command-panel">
-          <div className="section-heading">
-            <WalletCards aria-hidden="true" />
-            <div>
-              <h2>Policy Scenarios</h2>
-              <p>Test what the agent may buy after an x402 challenge.</p>
-            </div>
-          </div>
-
-          <div className="scenario-list" role="list" aria-label="Payment scenarios">
-            {(Object.keys(scenarios) as ScenarioId[]).map((scenarioId) => {
-              const scenario = scenarios[scenarioId];
-              const isSelected = scenarioId === activeScenario;
-
-              return (
-                <button
-                  key={scenario.id}
-                  type="button"
-                  className={`scenario-button ${isSelected ? "selected" : ""}`}
-                  onClick={() => setActiveScenario(scenarioId)}
-                  disabled={isRunning}
-                >
-                  <span>{scenario.label}</span>
-                  <small>{formatCurrency(scenario.requirement.amountUsd)}</small>
+            <div className="checkout-amount"><small>Amount due</small><strong>{formatUsd(request.amountUsd)}</strong><span>USDC</span></div>
+            <dl className="checkout-details">
+              <div><dt>Network</dt><dd><span className="network-dot" />Algorand Testnet</dd></div>
+              <div><dt>Recipient</dt><dd title={request.payTo}>{shortHash(request.payTo, 12, 8)}</dd></div>
+              <div><dt>Link expires</dt><dd>{new Date(request.expiresAt).toLocaleString()}</dd></div>
+            </dl>
+            {error && <div className="form-error" role="alert">{error}</div>}
+            {!activeAddress ? (
+              <button className="pay-button" type="button" onClick={connectWallet} disabled={isPaying}><WalletCards />Connect Pera Wallet</button>
+            ) : (
+              <>
+                <div className="connected-wallet"><span><CheckCircle2 /> Wallet connected</span><strong>{shortHash(activeAddress, 10, 6)}</strong></div>
+                <button className="pay-button" type="button" onClick={pay} disabled={isPaying}>
+                  {isPaying ? <LoaderCircle className="spin" /> : <WalletCards />}
+                  {isPaying ? "Confirm in Pera Wallet" : `Pay ${formatUsd(request.amountUsd)}`}
                 </button>
-              );
-            })}
-          </div>
+              </>
+            )}
+            <p className="checkout-protection"><ShieldCheck /> AgentPay verifies the signed amount and recipient before your wallet opens.</p>
+          </section>
+        )}
 
-          <div className="intent-box">
-            <span>Intent</span>
-            <p>{selectedScenario.intent}</p>
-          </div>
+        {request && state === "success" && transaction && (
+          <section className="checkout-shell success-checkout">
+            <span className="success-icon"><Check /></span>
+            <p className="eyebrow">Payment complete</p>
+            <h1>{formatUsd(request.amountUsd)} paid</h1>
+            <p>Your USDC payment settled on Algorand Testnet.</p>
+            <div className="receipt-box"><ReceiptText /><div><small>Transaction receipt</small><strong>{shortHash(transaction, 14, 10)}</strong></div></div>
+            <a className="primary-link wide" href={`${ALGORAND_TESTNET_LORA_URL}/transaction/${transaction}`} target="_blank" rel="noreferrer">View on Lora <ExternalLink /></a>
+          </section>
+        )}
 
-          <div className="action-row">
-            <button
-              type="button"
-              className="primary-action"
-              onClick={() => runScenario(activeScenario)}
-              disabled={isRunning}
-              aria-busy={isRunning}
-            >
-              <Play aria-hidden="true" />
-              {isRunning ? "Running scenario" : "Run policy simulation"}
-            </button>
-            <button type="button" className="secondary-action" onClick={resetDemo} disabled={isRunning}>
-              <RefreshCcw aria-hidden="true" />
-              Reset
-            </button>
-          </div>
-
-          {error ? (
-            <div className="error-banner" role="alert">
-              <AlertTriangle aria-hidden="true" />
-              <span>{error}</span>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="panel flow-panel">
-          <div className="section-heading">
-            <Activity aria-hidden="true" />
-            <div>
-              <h2>x402 Lifecycle</h2>
-              <p>Challenge, policy check, sign, retry, settle.</p>
-            </div>
-          </div>
-
-          <ol className="stage-list">
-            {stages.map((stage) => {
-              const Icon = statusIcon[stage.state];
-              return (
-                <li key={stage.id} className={`stage-item ${stage.state}`}>
-                  <div className="stage-icon" aria-hidden="true">
-                    <Icon />
-                  </div>
-                  <div>
-                    <div className="stage-title">
-                      <strong>{stage.label}</strong>
-                      <span>{statusLabel[stage.state]}</span>
-                    </div>
-                    <p>{stage.description}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-      </section>
-
-      <section className="details-grid">
-        <section className="panel transcript-panel">
-          <div className="section-heading">
-            <ClipboardCheck aria-hidden="true" />
-            <div>
-              <h2>Protocol Transcript</h2>
-              <p>Headers generated during the latest run.</p>
-            </div>
-          </div>
-
-          {result.transport === "browser-sim" ? (
-            <div className="transport-note">
-              Static fallback is active because no serverless API responded. Local and Vercel runs
-              use the real `/api/paid/*` resource server.
-            </div>
-          ) : null}
-
-          {result.transport === "official-challenge" ? (
-            <div className="official-note">
-              <BadgeCheck aria-hidden="true" />
-              This header was generated by the hosted official x402 middleware and decoded by
-              <code>@x402/core</code>.
-            </div>
-          ) : null}
-
-          <div className="transcript-stack">
-            <TranscriptLine
-              label="PAYMENT-REQUIRED"
-              value={result.paymentRequiredHeader}
-              fallback="Run a scenario to capture the 402 challenge."
-            />
-            <TranscriptLine
-              label="PAYMENT-SIGNATURE"
-              value={result.paymentSignatureHeader}
-              fallback="Appears only after policy approves signing."
-            />
-            <TranscriptLine
-              label="PAYMENT-RESPONSE"
-              value={result.paymentResponseHeader}
-              fallback="Appears after the paid retry settles."
-            />
-          </div>
-        </section>
-
-        <section className="panel decision-panel">
-          <div className="section-heading">
-            <ShieldCheck aria-hidden="true" />
-            <div>
-              <h2>Decision Detail</h2>
-              <p>Why the wallet signed or refused.</p>
-            </div>
-          </div>
-
-          {result.decision ? (
-            <div className="decision-content">
-              <div className={`decision-banner ${result.decision.status}`}>
-                {result.decision.status === "approved" ? (
-                  <CheckCircle2 aria-hidden="true" />
-                ) : result.decision.status === "blocked" ? (
-                  <ShieldX aria-hidden="true" />
-                ) : (
-                  <AlertTriangle aria-hidden="true" />
-                )}
-                <span>{result.decision.reason}</span>
-              </div>
-              <ul className="check-list">
-                {result.decision.checks.map((check) => (
-                  <li key={check.label} className={check.status}>
-                    <span>{check.label}</span>
-                    <strong title={check.detail}>
-                      {formatPolicyCheckDetail(check.label, check.detail)}
-                    </strong>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <EmptyState text="No policy decision yet. Run an x402 flow to evaluate a payment request." />
-          )}
-        </section>
-
-        <section className="panel receipt-panel">
-          <div className="section-heading">
-            <CheckCircle2 aria-hidden="true" />
-            <div>
-              <h2>Receipt</h2>
-              <p>Paid API result and settlement evidence.</p>
-            </div>
-          </div>
-
-          {result.settlement && result.apiResult ? (
-            <div className="receipt-content">
-              <div className="receipt-total">
-                <span>Settled</span>
-                <strong>{formatCurrency(result.settlement.amountUsd)}</strong>
-              </div>
-              <dl>
-                <div>
-                  <dt>Payment id</dt>
-                  <dd>{result.settlement.paymentId}</dd>
-                </div>
-                <div>
-                  <dt>{result.settlement.onchain ? "Onchain tx" : "Receipt hash"}</dt>
-                  <dd>{shortHash(result.settlement.txHash, 14, 8)}</dd>
-                </div>
-                <div>
-                  <dt>Receipt mode</dt>
-                  <dd>
-                    {result.settlement.receiptKind === "x402-facilitator"
-                      ? "Official x402 facilitator"
-                      : "Demo facilitator"}
-                  </dd>
-                </div>
-                {result.settlement.facilitatorUrl ? (
-                  <div>
-                    <dt>Facilitator</dt>
-                    <dd>{result.settlement.facilitatorUrl}</dd>
-                  </div>
-                ) : null}
-                {result.settlement.explorerUrl ? (
-                  <div>
-                    <dt>Explorer</dt>
-                    <dd>
-                      <a
-                        className="receipt-link"
-                        href={result.settlement.explorerUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View transaction
-                      </a>
-                    </dd>
-                  </div>
-                ) : null}
-                <div>
-                  <dt>API result</dt>
-                  <dd>{result.apiResult.summary}</dd>
-                </div>
-                <div>
-                  <dt>Evidence</dt>
-                  <dd>{result.settlement.evidenceNote}</dd>
-                </div>
-              </dl>
-            </div>
-          ) : (
-            <EmptyState text="A receipt appears after an approved request is retried and settled." />
-          )}
-        </section>
-
-        <section className="panel audit-panel">
-          <div className="section-heading">
-            <ClipboardCheck aria-hidden="true" />
-            <div>
-              <h2>Audit Log</h2>
-              <p>Every approval, block, and settlement is recorded.</p>
-            </div>
-          </div>
-
-          {auditLog.length > 0 ? (
-            <ul className="audit-list">
-              {auditLog.map((event) => (
-                <li key={event.id} className={event.status}>
-                  <time>{event.time}</time>
-                  <div>
-                    <strong>{event.title}</strong>
-                    <p>{event.detail}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState text="No audit events yet. Run an allowed or blocked payment to create one." />
-          )}
-        </section>
-      </section>
-    </main>
-  );
-}
-
-function TranscriptLine({
-  label,
-  value,
-  fallback,
-}: {
-  label: string;
-  value?: string;
-  fallback: string;
-}) {
-  return (
-    <div className="transcript-line">
-      <span>{label}</span>
-      <code>{value ? `${value.slice(0, 86)}${value.length > 86 ? "..." : ""}` : fallback}</code>
+        <div className="checkout-trust"><LockKeyhole /><span>Non-custodial checkout</span><span>·</span><span>Settled by {new URL(GOPLAUSIBLE_FACILITATOR_URL).hostname}</span></div>
+      </main>
+      <ProductFooter />
     </div>
   );
 }
 
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="empty-state">
-      <Clock3 aria-hidden="true" />
-      <p>{text}</p>
-    </div>
-  );
+export default function App() {
+  return window.location.pathname.startsWith("/pay") ? <BuyerPage /> : <SellerPage />;
 }
-
-export default App;

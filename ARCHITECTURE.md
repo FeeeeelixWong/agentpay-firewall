@@ -1,94 +1,82 @@
 # AgentPay Firewall Architecture
 
-AgentPay Firewall combines a live Algorand x402 seller, a pre-sign policy engine, and wallet-controlled buyer authorization. Protocol proof and deterministic policy scenarios are kept separate so every claim is independently verifiable.
+AgentPay Firewall is a non-custodial checkout layer around x402. Sellers define payment terms, buyers retain wallet control, and the server prevents editable URLs from changing what the buyer is asked to sign.
 
 ## System Boundary
 
 ```mermaid
-flowchart TB
-  subgraph Buyer["Buyer side"]
-    Agent["AI agent"]
-    Policy["Pre-sign policy firewall"]
-    Wallet["Pera Wallet"]
-  end
+sequenceDiagram
+  actor Seller
+  participant Link as Payment Link API
+  actor Buyer
+  participant Resource as Dynamic x402 Resource
+  participant Wallet as Pera Wallet
+  participant Facilitator as GoPlausible
+  participant Chain as Algorand Testnet
 
-  subgraph Seller["Vercel seller"]
-    Official["/api/x402/official\n@x402/express + @x402/avm"]
-    Sim["/api/paid/*\ndeterministic policy scenarios"]
-  end
-
-  Facilitator["GoPlausible facilitator"]
-  Chain["Algorand Testnet\nUSDC ASA 10458941"]
-
-  Agent --> Official
-  Official -->|"402 PAYMENT-REQUIRED"| Policy
-  Policy -->|"allow"| Wallet
-  Policy -->|"deny or review"| Agent
-  Wallet -->|"PAYMENT-SIGNATURE"| Official
-  Official --> Facilitator
-  Facilitator --> Chain
-  Official -->|"PAYMENT-RESPONSE + resource"| Agent
-  Agent -. "judge-safe scenarios" .-> Sim
+  Seller->>Link: amount + receiving address
+  Link-->>Seller: HMAC-signed checkout URL
+  Seller-->>Buyer: share checkout URL
+  Buyer->>Link: verify signed request
+  Link-->>Buyer: trusted amount + recipient
+  Buyer->>Resource: GET signed request
+  Resource-->>Buyer: 402 + PAYMENT-REQUIRED
+  Buyer->>Buyer: compare challenge with signed terms
+  Buyer->>Wallet: approve exact payment
+  Wallet->>Resource: retry with PAYMENT-SIGNATURE
+  Resource->>Facilitator: verify and settle
+  Facilitator->>Chain: atomic USDC transaction group
+  Resource-->>Buyer: protected result + PAYMENT-RESPONSE
 ```
 
-## Layer A: Algorand x402 Seller
+## Seller Layer
 
-Public endpoint: `https://agentpay-firewall.vercel.app/api/x402/official`
+The Seller UI submits payment terms to [`api/payment-links.ts`](api/payment-links.ts). [`server/payment-link.ts`](server/payment-link.ts) validates and normalizes the amount, Algorand address, title, and description. It creates a seven-day request and signs the serialized payload with HMAC-SHA256.
 
-Implementation: [api/x402/official.ts](api/x402/official.ts)
+No database is required for the MVP. The request is self-contained, while authenticity comes from `PAYMENT_LINK_SECRET`. Changing one character in the payload or signature makes the link invalid.
 
-The serverless route constructs:
+## Buyer Layer
 
-- `HTTPFacilitatorClient` from `@x402/core/server`
-- `x402ResourceServer` and `paymentMiddleware` from `@x402/express`
-- `ExactAvmScheme` from `@x402/avm/exact/server`
+The Buyer route at `/pay?request=...` verifies the signed request through the server before displaying it. It shows the amount, asset, network, recipient, purpose, and expiry before wallet connection.
 
-The middleware generates an x402 v2 challenge with this accepted payment option:
+Before requesting a Pera signature, the client independently verifies:
+
+1. The x402 challenge recipient equals the signed Seller recipient.
+2. The x402 challenge atomic amount equals the signed Seller amount.
+3. The payment uses the Algorand AVM x402 path and Testnet USDC.
+
+The wallet private key and mnemonic never enter AgentPay Firewall.
+
+## Dynamic x402 Resource
+
+[`api/x402/pay.ts`](api/x402/pay.ts) uses a dynamic `price` and `payTo` supported by `@x402/core`. Both values are resolved only from the verified signed request.
 
 ```text
 scheme: exact
 network: algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=
-amount: 1000 atomic units = 0.001 USDC
-asset: 10458941
-payTo: U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA
+asset: USDC ASA 10458941
+price: signed Seller amount
+payTo: signed Seller address
 facilitator: https://facilitator.goplausible.xyz
 ```
 
-`npm run smoke:x402` requires HTTP 402, decodes `PAYMENT-REQUIRED`, and asserts protocol version, exact scheme, Algorand network, USDC ASA, amount, receiver, and resource binding.
+The protected endpoint returns x402 v2 `PAYMENT-REQUIRED`, accepts a wallet-created `PAYMENT-SIGNATURE`, and exposes the facilitator `PAYMENT-RESPONSE` after settlement.
 
-## Layer B: Pre-Sign Policy Firewall
+## Compatibility Route
 
-The policy engine runs after the payment challenge is received and before the buyer wallet signs. It checks service allowlist, per-request limit, daily budget, asset and network, risk score, and human approval threshold.
+The fixed-price endpoint `/api/x402/official` remains available as a stable proof artifact for the Algorand final. It is not used to create new seller-specific checkout links. The previous Base Sepolia implementation remains at `/api/x402/base` as portability evidence.
 
-| Decision | Wallet behavior | Payment behavior |
-| --- | --- | --- |
-| Allow | Signing may proceed | Client retries the protected resource |
-| Deny | Signing is never requested | No authorization exists |
-| Review | Signing pauses | A human must approve first |
+## Threat Controls
 
-The `/api/paid/*` routes generate explicitly labeled, offchain demonstration receipts. They are not presented as facilitator or onchain evidence.
+| Threat | Control |
+| --- | --- |
+| Buyer edits amount or recipient in URL | Terms are in a signed token, not trusted query fields |
+| Modified token reaches facilitator | Token is verified before x402 middleware runs |
+| Old link is replayed indefinitely | Signed requests expire after seven days |
+| UI and x402 challenge disagree | Buyer compares amount and recipient before wallet approval |
+| Server captures buyer key | Signing occurs only inside Pera Wallet |
+| Fake settlement receipt | Receipt comes from x402 `PAYMENT-RESPONSE` and links to Lora |
 
-## Layer C: Pera Wallet Buyer
+## Production Extensions
 
-Implementation: [src/lib/algorand-wallet.ts](src/lib/algorand-wallet.ts)
-
-The browser buyer requests the protected resource, decodes the challenge, evaluates policy, and uses Pera Wallet to sign the facilitator-provided Algorand transaction group. It then retries with `PAYMENT-SIGNATURE`, decodes `PAYMENT-RESPONSE`, and exposes the returned transaction for Lora inspection.
-
-The private key and mnemonic never enter AgentPay Firewall.
-
-## Compatibility Boundary
-
-The previous Base Sepolia seller is preserved at `/api/x402/base`. It demonstrates that the policy layer can support another x402 network, but the final-round primary route and judging evidence are Algorand-specific.
-
-## Security Properties
-
-- No buyer private key is stored by the app.
-- Denied requests never reach wallet signing.
-- The payment challenge binds network, asset, amount, receiver, and resource.
-- Verification and settlement are delegated to official x402 middleware and GoPlausible.
-- Simulation and onchain receipts use distinct labels.
-- Server responses use `Cache-Control: no-store` and expose only required x402 headers.
-
-## Production Hardening
-
-A commercial deployment would add durable policy storage, authorization idempotency, replay monitoring, authenticated organizations, account-level limits, and operational alerts.
+A production release should add authenticated Seller organizations, revocable or single-use links, durable order state, webhook delivery, idempotency records, rate limits, custom expiry controls, and mainnet asset configuration. These are deliberately outside the stateless MVP trust boundary.

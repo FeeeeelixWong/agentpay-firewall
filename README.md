@@ -1,20 +1,42 @@
 # AgentPay Firewall
 
-Policy-controlled x402 payments for autonomous agents, now running on Algorand Testnet.
+Seller-created, buyer-verified x402 payment links for USDC on Algorand.
 
-[Live app](https://agentpay-firewall.vercel.app/) | [Algorand x402 endpoint](https://agentpay-firewall.vercel.app/api/x402/official) | [Verified settlement](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) | [Source](https://github.com/FeeeeelixWong/agentpay-firewall)
+[Live seller app](https://agentpay-firewall.vercel.app/) | [Buyer checkout](https://agentpay-firewall.vercel.app/pay) | [Verified settlement](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) | [Architecture](ARCHITECTURE.md)
 
-## Final-Round Algorand Integration
+## Product Flow
 
-The public product directly exposes an x402-protected seller resource on Algorand Testnet:
+AgentPay Firewall separates the payment experience into two clear roles:
+
+| Role | What they do | What they control |
+| --- | --- | --- |
+| Seller | Enters an amount, receiving address, title, and description; then creates a link | Price and settlement wallet |
+| Buyer | Opens the link, reviews the signed terms, connects Pera Wallet, and approves payment | Wallet authorization and final consent |
+
+```mermaid
+flowchart LR
+  S["Seller sets amount + wallet"] --> L["Server signs payment link"]
+  L --> B["Buyer opens checkout"]
+  B --> V["App verifies signed terms"]
+  V --> C["x402 returns PAYMENT-REQUIRED"]
+  C --> W["Buyer approves in Pera Wallet"]
+  W --> F["GoPlausible settles USDC"]
+  F --> R["Buyer receives onchain receipt"]
+```
+
+The amount and recipient are not trusted from editable URL parameters. They are encoded in an HMAC-signed, seven-day payment request. The Buyer page also checks that the live x402 challenge exactly matches the signed amount and recipient before opening wallet approval.
+
+## Direct x402 Integration
+
+Every generated checkout points to a dynamic protected resource:
 
 ```text
-GET https://agentpay-firewall.vercel.app/api/x402/official
+GET /api/x402/pay?request=<signed-token>
 <- 402 Payment Required
 <- PAYMENT-REQUIRED: <x402 v2 challenge>
 ```
 
-The primary route uses:
+The implementation uses:
 
 - `@x402/express` payment middleware
 - `@x402/core` facilitator client and HTTP protocol types
@@ -22,119 +44,65 @@ The primary route uses:
 - GoPlausible facilitator
 - Algorand Testnet USDC ASA `10458941`
 
-It is a direct protocol integration, not a custom header approximation. Verify the live challenge without connecting a wallet:
+The original fixed-price integration remains available at [`/api/x402/official`](https://agentpay-firewall.vercel.app/api/x402/official) as reproducible final-round evidence. New product checkouts use `/api/x402/pay` and seller-specific signed terms.
 
-```bash
-npm install
-npm run smoke:x402
-```
+## Verifiable Evidence
 
-Expected result:
+| Proof | Result |
+| --- | --- |
+| Official x402 challenge | Live `402` with x402 v2 `PAYMENT-REQUIRED` |
+| Real wallet authorization | Pera Wallet signed a request-bound AVM payment |
+| Facilitated settlement | GoPlausible settled the atomic transaction group |
+| Onchain transaction | [`SEQAUK...QEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) |
+| Buyer and seller | Buyer `25QH...RRBM` paid Seller `U3SN...PQJA` |
 
-```text
-Hosted official x402 challenge verified.
-Protocol version: 2
-Scheme: exact
-Network: algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=
-Amount: 1000
-Pay to: U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA
-```
+Machine-readable evidence is stored in [`docs/algorand-x402-settlement-evidence.json`](docs/algorand-x402-settlement-evidence.json).
 
-## What The Product Does
+## Security Boundary
 
-x402 lets an agent pay for an internet resource. AgentPay Firewall decides whether that payment fits the owner's mandate before asking the wallet to sign.
-
-```mermaid
-flowchart LR
-  A["AI agent requests paid API"] --> B["Algorand x402 seller"]
-  B -->|"402 + PAYMENT-REQUIRED"| C["Pre-sign policy firewall"]
-  C -->|"deny"| D["Stop before signing"]
-  C -->|"review"| E["Human approval"]
-  C -->|"allow"| F["Pera Wallet signs payment"]
-  F --> G["Retry with PAYMENT-SIGNATURE"]
-  G --> H["GoPlausible verifies and settles"]
-  H --> I["Algorand Testnet transaction"]
-  I -->|"PAYMENT-RESPONSE"| J["Resource + receipt"]
-```
-
-The policy layer evaluates request amount, daily budget, approved service, network and asset, risk score, and human approval threshold.
-
-## Verifiable Paths
-
-| Path | What it proves | How to verify |
-| --- | --- | --- |
-| Hosted Algorand x402 | Direct seller integration with `@x402/avm` | Click **Verify official 402** or run `npm run smoke:x402` |
-| Pera buyer flow | Wallet-owned Algorand authorization | Connect Pera Wallet and use **Pay 0.001 USDC** |
-| Onchain settlement | Buyer-to-Seller USDC transfer with facilitator fee sponsorship | [Inspect transaction `SEQA...QWDQ` in Lora](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) |
-| Policy scenarios | Allow, deny, and manual-review outcomes before signing | Run the three deterministic scenarios in the app |
-| Base compatibility | The policy product can preserve a previous EVM integration | Inspect `/api/x402/base` and the archived Base evidence |
-
-The `/api/paid/*` routes are clearly labeled simulations for deterministic policy demonstrations. `/api/x402/official` is the final-round Algorand x402 route.
-
-## Live Configuration
-
-```text
-Protocol: x402 v2
-Scheme: exact
-Network: Algorand Testnet
-Asset: USDC ASA 10458941
-Price: 0.001 USDC (1000 atomic units)
-Facilitator: https://facilitator.goplausible.xyz
-Seller: U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA
-```
-
-## Settlement Status
-
-- Live Algorand `402 -> PAYMENT-REQUIRED`: verified.
-- GoPlausible support for the registered AVM scheme: verified.
-- Pera Wallet buyer signed the request-bound payment.
-- GoPlausible settled an atomic two-transaction group at round `66373009`.
-- Buyer `25QH...RRBM` paid `0.001 USDC` to Seller `U3SN...PQJA`.
-- The facilitator fee payer covered `0.002 ALGO`; the USDC transfer itself paid zero fee.
-- Transaction: [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ).
-- Machine-readable evidence: [`docs/algorand-x402-settlement-evidence.json`](docs/algorand-x402-settlement-evidence.json).
-
-The earlier Base Sepolia receipt remains available as portability evidence at [docs/x402-settlement-evidence.json](docs/x402-settlement-evidence.json), but it is not presented as the required Algorand final-round transaction.
+- Seller terms are normalized and signed on the server.
+- Modified or expired links are rejected before an x402 challenge is created.
+- The Buyer page compares the signed amount and recipient with the live challenge.
+- Buyer keys remain inside Pera Wallet.
+- AgentPay never signs, broadcasts, or holds buyer funds.
+- GoPlausible verifies and settles through the official x402 AVM path.
+- Payment-link APIs are non-cacheable and input bodies are size-limited.
 
 ## Local Development
 
+Create a local secret with at least 32 characters:
+
 ```bash
+export PAYMENT_LINK_SECRET="replace-with-a-long-random-development-secret"
 npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:5176`.
-
-Run the Algorand seller harness and challenge verifier:
-
-```bash
-npm run dev:x402
-npm run x402:challenge
-```
-
-The default Seller is the public Testnet address above. Override it with `ALGORAND_PAY_TO` when needed.
-
-For a local automated buyer, keep credentials only in the shell environment:
-
-```bash
-ALGORAND_BUYER_MNEMONIC="..." npm run x402:pay
-```
-
-Never commit a mnemonic or private key. The browser path keeps signing inside Pera Wallet.
+Open `http://127.0.0.1:5176`. The Vite-only server renders the UI; run through Vercel locally or deploy the serverless APIs to create live links.
 
 ## Validation
 
 ```bash
 npm test
 npm run build
-npm run x402:ready
 npm run smoke:x402
+npm run smoke:checkout
 ```
+
+`smoke:checkout` creates a Seller link, validates the Buyer representation, asserts the dynamic `402` amount and recipient, and confirms a modified token is rejected.
+
+## Configuration
+
+| Variable | Purpose |
+| --- | --- |
+| `PAYMENT_LINK_SECRET` | HMAC secret used to sign and verify checkout terms; required |
+| `PUBLIC_APP_URL` | Optional canonical public origin for generated links |
+| `ALGORAND_X402_FACILITATOR_URL` | Optional facilitator override |
 
 ## Documentation
 
-- [Final-round correction](RESUBMISSION.md)
 - [Architecture and trust boundaries](ARCHITECTURE.md)
+- [Final-round correction](RESUBMISSION.md)
 - [Submission narrative](SUBMISSION.md)
 - [Devpost project story](docs/devpost-project-story.md)
 

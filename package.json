@@ -10,6 +10,7 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:checkout": "tsx scripts/payment-link-smoke.ts",
     "smoke:x402": "tsx scripts/x402-hosted-smoke.ts",
     "smoke:x402:base": "X402_HOSTED_URL=https://agentpay-firewall.vercel.app/api/x402/base X402_EXPECTED_NETWORK_PREFIX=eip155: tsx scripts/x402-hosted-smoke.ts",
     "record:demo": "node scripts/record-demo.mjs",
