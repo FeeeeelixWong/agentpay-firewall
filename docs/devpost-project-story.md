@@ -2,81 +2,79 @@
 
 ## Short Description
 
-AgentPay Firewall is a policy wallet that lets AI agents pay for official x402 resources only within user-defined budgets, allowlists, risk limits, and approval rules.
+AgentPay Firewall lets a Seller create a protected Algorand x402 payment link and lets a Buyer review, authorize, and verify the resulting payment without giving up wallet custody.
 
-## About The Project
+## Inspiration
 
-### Inspiration
+x402 makes paid API access programmable, but a fixed-price endpoint is still developer infrastructure. Real users need a product layer: the Seller must decide how much to charge and where funds should go, while the Buyer must understand the exact terms before a wallet asks for approval.
 
-AI agents are moving from answering questions to taking paid actions: calling premium APIs, buying data, booking services, and paying other agents. x402 gives them an internet-native payment rail, but a payment rail alone does not answer the trust question: what is an autonomous agent actually allowed to buy?
+AgentPay Firewall was rebuilt around that missing interaction. The Seller creates the payment request. The Buyer receives one signed checkout link. The x402 challenge and final receipt must agree with those terms.
 
-AgentPay Firewall was built around a simple product belief: an agent wallet should be more than a signer. It should enforce a human-defined mandate before every payment authorization.
+## What It Does
 
-### What It Does
+AgentPay Firewall has two focused experiences:
 
-AgentPay Firewall sits between an AI agent and its wallet. It receives an official x402 `402 Payment Required` challenge, checks the payment against policy, and asks the wallet to sign only when the request is allowed.
+- **Seller workspace:** set a title, USDC amount, Algorand Testnet receiving address, and description; then create a 7-day payment link.
+- **Buyer checkout:** verify the signed request, review amount, recipient, network, and expiry, then connect Pera Wallet.
 
-The product supports three policy outcomes:
+The server signs each request with HMAC. Editing the token, amount, or recipient invalidates the link. A valid checkout maps to a dynamic x402 resource whose `PAYMENT-REQUIRED` challenge is generated from the same signed terms.
 
-- **Allow:** create `PAYMENT-SIGNATURE`, retry the resource, and receive `PAYMENT-RESPONSE`.
-- **Deny:** stop before the wallet is asked to sign.
-- **Review:** pause a higher-value request for human approval.
+## Direct x402 Integration
 
-### Direct x402 Integration
-
-The public Vercel deployment exposes this official x402-protected resource:
+The dynamic protected resource is:
 
 ```text
-https://agentpay-firewall.vercel.app/api/x402/official
+https://agentpay-firewall.vercel.app/api/x402/pay?request=<signed-token>
 ```
 
-It uses `@x402/express` `paymentMiddleware`, `@x402/core` facilitator infrastructure, and the `@x402/avm` exact scheme. An unpaid request returns HTTP 402 with an x402 v2 `PAYMENT-REQUIRED` header for `0.001 USDC` on Algorand Testnet. Verification and settlement are routed through GoPlausible.
+It uses `@x402/express`, `@x402/core`, and the `@x402/avm` exact scheme. An unpaid request returns HTTP `402` with an x402 v2 `PAYMENT-REQUIRED` challenge for Algorand Testnet USDC ASA `10458941`. Verification and settlement are routed through GoPlausible.
 
-The app places this protocol proof first. Evaluators can click **Verify official 402** without connecting a wallet, or run:
+The hosted checkout smoke creates a real Seller request, resolves the Buyer link, decodes the deployed challenge, verifies amount, recipient, network, scheme, and asset, and proves that a tampered token is rejected:
 
 ```bash
-npm run smoke:x402
+npm run smoke:checkout
 ```
 
-The test decodes the deployed challenge with `@x402/core/http` and verifies protocol version, scheme, network, amount, receiver, and resource binding.
+## How We Built It
 
-### How We Built It
-
-The implementation combines:
-
-- React, TypeScript, and Vite for the product interface
-- Vercel serverless functions for the public seller endpoint
+- React, TypeScript, and Vite for the Seller and Buyer experiences
+- Vercel serverless functions for payment-link creation and x402 resources
+- HMAC-SHA256 signed, expiring payment request tokens
 - `@x402/express`, `@x402/core`, `@x402/avm`, and `@x402/fetch`
-- Pera Wallet transaction authorization without exporting the buyer key
-- a deterministic policy engine for budgets, allowlists, assets, networks, risk, and human approval
-- automated unit, build, hosted x402, and payment lifecycle checks
+- Pera Wallet for Buyer-owned authorization
+- GoPlausible for AVM verification and settlement
+- Vitest plus hosted checkout and x402 smoke tests
 
-The complete path is live and reproduced. Pera Wallet signed a request-bound `0.001 USDC` payment, GoPlausible sponsored the atomic group fee and settled it on Algorand Testnet, and the protected resource returned its paid response. The confirmed transaction is [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ) at round `66373009`.
+## Verified Settlement
 
-### Challenges
+The official AVM settlement path has already completed on Algorand Testnet. A funded Pera Buyer paid `0.001 USDC` through GoPlausible, and the payment confirmed at round `66373009`.
 
-The hardest product challenge was separating two needs that can easily be confused. Judges need a deterministic way to explore allow, deny, and manual-review behavior without spending funds, while the submission also needs a genuine x402 integration. The final product therefore has two explicit layers: `/api/x402/official` for direct protocol verification and `/api/paid/*` only for policy simulations. The UI and documentation label them separately.
+Verified transaction: [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ)
 
-The final round introduced an explicit Algorand requirement after the earlier evaluation. The primary route was migrated from EVM to AVM, the buyer was rebuilt around Pera Wallet, and the old Base path was isolated at `/api/x402/base` so the judging surface is unambiguous.
+This receipt proves live settlement for the same Algorand network, USDC asset, amount, and Seller address used by the product demo. The dynamic Seller-link route is independently proven by the hosted checkout smoke and mismatch assertions.
 
-### What We Learned
+## Challenges
 
-The agent wallet itself is not the differentiator. The control plane is: standing mandates, pre-sign checks, clear refusal conditions, approval escalation, and evidence after every action.
+The largest change was moving from an engineer-facing policy dashboard to a user-facing payment product without weakening the protocol proof. The new interface had to keep Seller configuration, Buyer review, wallet custody, dynamic `402` generation, and receipt evidence understandable as one flow.
 
-Human wallet UX asks someone to inspect each popup. Agent payment UX needs enforceable rules that remain safe when no human is watching every request.
+Another challenge was preserving a strict trust boundary. AgentPay never receives a private key, never signs on behalf of the Buyer, and rejects a challenge if it differs from the Seller-signed request.
 
-### What's Next
+## What We Learned
 
-Next steps are durable policy storage, replay and idempotency records, smart-account or session-key enforcement, organization accounts, and packaging the policy engine as reusable middleware for x402 buyers and sellers.
+Protocol correctness is necessary but not sufficient. The product becomes understandable only when pricing intent, Buyer consent, and settlement evidence are shown as one continuous experience.
+
+## What's Next
+
+Next steps are persistent Seller accounts, reusable checkout templates, payment status webhooks, idempotency records, receipt history, production Algorand Mainnet configuration, and optional policy mandates for autonomous agent buyers.
 
 ## Built With
 
-React, TypeScript, Vite, Vercel, Express, `@x402/express`, `@x402/core`, `@x402/avm`, `@x402/fetch`, Pera Wallet, Algorand Testnet, GoPlausible, and USDC ASA `10458941`.
+React, TypeScript, Vite, Vercel, Express, HMAC-SHA256, `@x402/express`, `@x402/core`, `@x402/avm`, `@x402/fetch`, Pera Wallet, Algorand Testnet, GoPlausible, and USDC ASA `10458941`.
 
 ## Links
 
-- Live app: https://agentpay-firewall.vercel.app/
-- Official x402 endpoint: https://agentpay-firewall.vercel.app/api/x402/official
+- Live product: https://agentpay-firewall.vercel.app/
+- Dynamic x402 resource: `https://agentpay-firewall.vercel.app/api/x402/pay?request=<signed-token>`
 - Verified Algorand settlement: https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ
 - GitHub: https://github.com/FeeeeelixWong/agentpay-firewall
 - Demo video: https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4

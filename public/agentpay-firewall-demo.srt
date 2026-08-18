@@ -1,39 +1,31 @@
 1
-00:00:00,000 --> 00:00:05,800
-AgentPay Firewall is a pre-sign policy layer for autonomous agent payments.
+00:00:00,000 --> 00:00:07,316
+AgentPay Firewall turns x402 into a payment product that sellers and buyers can actually use.
 
 2
-00:00:05,800 --> 00:00:17,818
-The live Vercel endpoint runs x402 version two directly on Algorand Testnet. One click verifies the HTTP 402 PAYMENT-REQUIRED challenge.
+00:00:07,316 --> 00:00:17,316
+The seller starts by naming the payment, setting the USDC amount, and choosing the Algorand address that should receive settlement.
 
 3
-00:00:17,818 --> 00:00:30,196
-Agents can pay, but wallets still need rules. The owner defines request caps, budgets, approved services, network, asset, risk score, and human approval.
+00:00:17,316 --> 00:00:27,080
+One click creates a protected checkout link. The amount and recipient are signed by the server, so editing the URL invalidates the request.
 
 4
-00:00:30,196 --> 00:00:41,422
-First, the agent calls a paid wallet-risk API. The seller returns an x402 challenge for exactly 0.001 USDC.
+00:00:27,080 --> 00:00:36,124
+The buyer opens a separate checkout page and sees exactly who will be paid, how much is due, the network, and when the link expires.
 
 5
-00:00:41,422 --> 00:00:52,504
-This simulation shows the approved path. Every policy gate passes before wallet authorization, then the paid request is retried and returns PAYMENT-RESPONSE.
+00:00:36,124 --> 00:00:46,680
+Behind this page, the dynamic resource returns a real x402 version two PAYMENT-REQUIRED challenge with the same signed amount and recipient.
 
 6
-00:00:52,504 --> 00:01:03,370
-Now the unsafe path. A costly non-allowlisted crawl receives a challenge, but policy fails before signing, so no payment authorization is created.
+00:00:46,680 --> 00:00:56,732
+Before Pera Wallet opens, AgentPay compares the challenge with the seller request. The buyer keeps custody and gives the final approval.
 
 7
-00:01:03,370 --> 00:01:12,628
-A third request uses an approved service but crosses the human approval threshold. The wallet pauses instead of silently spending.
+00:00:56,732 --> 00:01:10,696
+The official AVM settlement path has already settled on Algorand Testnet. GoPlausible processed 0.001 USDC and returned a transaction receipt that anyone can verify in Lora.
 
 8
-00:01:12,628 --> 00:01:22,438
-In the real path, the buyer key stays inside Pera Wallet. GoPlausible sponsors the group fee and settles the signed Algorand payment.
-
-9
-00:01:22,438 --> 00:01:34,864
-This is the confirmed transaction. GoPlausible settled 0.001 USDC on Algorand Testnet and returned PAYMENT-RESPONSE with verifiable Lora evidence.
-
-10
-00:01:34,864 --> 00:01:44,650
-AgentPay Firewall connects seller pricing, buyer-owned policy, wallet authorization, facilitator settlement, and an auditable onchain receipt.
+00:01:10,696 --> 00:01:21,324
+AgentPay Firewall: seller-created payment links, buyer-owned authorization, official x402 settlement, and verifiable onchain receipts.

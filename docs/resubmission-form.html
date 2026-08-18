@@ -47,24 +47,24 @@
 
       <section>
         <p class="label">Correction implemented</p>
-        <p class="value">AgentPay Firewall now directly implements x402 on Algorand Testnet. The protected endpoint at https://agentpay-firewall.vercel.app/api/x402/official uses @x402/express paymentMiddleware, @x402/core facilitator infrastructure, and the @x402/avm exact scheme. An unpaid GET returns HTTP 402 with an x402 v2 PAYMENT-REQUIRED challenge for 0.001 USDC using Testnet ASA 10458941. Payment verification and settlement are routed through the GoPlausible facilitator.</p>
+        <p class="value">AgentPay Firewall is now a two-sided Algorand x402 payment product. A Seller sets the USDC amount and receiving address, then creates a 7-day HMAC-signed checkout link. The Buyer reviews the exact terms before connecting Pera Wallet. Each link resolves to a dynamic @x402/express + @x402/avm resource whose PAYMENT-REQUIRED challenge must match the signed amount and recipient. GoPlausible handles verification and settlement.</p>
         <button type="button">Copy</button>
       </section>
 
       <section>
         <p class="label">How evaluators can verify it</p>
         <p class="value">1. Open https://agentpay-firewall.vercel.app/.
-2. Click "Verify official 402" in the first panel.
-3. Confirm the status changes to "Official x402 verified".
-4. Review x402 v2, exact, Algorand Testnet, USDC ASA 10458941, and 0.001 USDC.
-5. Connect Pera Wallet on Testnet for the buyer flow.
-6. Run npm run smoke:x402 from the repository for automated hosted verification.</p>
+2. Set a payment title, USDC amount, and receiving Algorand Testnet address.
+3. Click "Create payment link".
+4. Open the generated Buyer checkout and review amount, recipient, network, and expiry.
+5. Connect Pera Wallet only after the signed request is verified.
+6. Run npm run smoke:checkout to verify live link creation, dynamic HTTP 402, AVM details, and tamper rejection.</p>
         <button type="button">Copy</button>
       </section>
 
       <section>
         <p class="label">Algorand settlement status</p>
-        <p class="value">Confirmed on Algorand Testnet. A funded Pera Buyer paid 0.001 USDC (ASA 10458941) to the configured Seller through the GoPlausible facilitator. The atomic group used facilitator fee sponsorship and confirmed at round 66373009.
+        <p class="value">The official AVM settlement path is confirmed on Algorand Testnet. A funded Pera Buyer paid 0.001 USDC (ASA 10458941) to the same Seller through GoPlausible. The atomic group used facilitator fee sponsorship and confirmed at round 66373009. The dynamic Seller-link path is independently verified by the hosted checkout smoke and mismatch assertions.
 
 Transaction:
 https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ</p>

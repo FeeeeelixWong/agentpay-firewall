@@ -1,19 +1,15 @@
-AgentPay Firewall is a pre-sign policy layer for autonomous agent payments.
+AgentPay Firewall turns x402 into a payment product that sellers and buyers can actually use.
 
-The live Vercel endpoint runs x402 version two directly on Algorand Testnet. One click verifies the HTTP 402 PAYMENT-REQUIRED challenge.
+The seller starts by naming the payment, setting the USDC amount, and choosing the Algorand address that should receive settlement.
 
-Agents can pay, but wallets still need rules. The owner defines request caps, budgets, approved services, network, asset, risk score, and human approval.
+One click creates a protected checkout link. The amount and recipient are signed by the server, so editing the URL invalidates the request.
 
-First, the agent calls a paid wallet-risk API. The seller returns an x402 challenge for exactly 0.001 USDC.
+The buyer opens a separate checkout page and sees exactly who will be paid, how much is due, the network, and when the link expires.
 
-This simulation shows the approved path. Every policy gate passes before wallet authorization, then the paid request is retried and returns PAYMENT-RESPONSE.
+Behind this page, the dynamic resource returns a real x402 version two PAYMENT-REQUIRED challenge with the same signed amount and recipient.
 
-Now the unsafe path. A costly non-allowlisted crawl receives a challenge, but policy fails before signing, so no payment authorization is created.
+Before Pera Wallet opens, AgentPay compares the challenge with the seller request. The buyer keeps custody and gives the final approval.
 
-A third request uses an approved service but crosses the human approval threshold. The wallet pauses instead of silently spending.
+The official AVM settlement path has already settled on Algorand Testnet. GoPlausible processed 0.001 USDC and returned a transaction receipt that anyone can verify in Lora.
 
-In the real path, the buyer key stays inside Pera Wallet. GoPlausible sponsors the group fee and settles the signed Algorand payment.
-
-This is the confirmed transaction. GoPlausible settled 0.001 USDC on Algorand Testnet and returned PAYMENT-RESPONSE with verifiable Lora evidence.
-
-AgentPay Firewall connects seller pricing, buyer-owned policy, wallet authorization, facilitator settlement, and an auditable onchain receipt.
+AgentPay Firewall: seller-created payment links, buyer-owned authorization, official x402 settlement, and verifiable onchain receipts.

@@ -1,4 +1,4 @@
-# Brainwave 2026 Algorand Final-Round Proof
+# Brainwave 2026 Algorand x402 Final-Round Proof
 
 ## Project
 
@@ -6,58 +6,73 @@
 
 **Track:** Algorand x402 Blockchain Track
 
-**Live project:** https://agentpay-firewall.vercel.app/
+**Live product:** https://agentpay-firewall.vercel.app/
 
 **Source:** https://github.com/FeeeeelixWong/agentpay-firewall
 
-## Required Correction
+**Demo:** https://agentpay-firewall.vercel.app/agentpay-firewall-demo.mp4
 
-The primary public seller now runs x402 on Algorand Testnet:
+## Product Correction Delivered
 
-```text
-https://agentpay-firewall.vercel.app/api/x402/official
-```
+AgentPay Firewall is now a two-sided payment product instead of a fixed server demo:
 
-It uses `@x402/express` payment middleware, `@x402/core` facilitator infrastructure, `@x402/avm`, Algorand Testnet USDC ASA `10458941`, and GoPlausible. The relevant dependencies are declared in `package.json`.
+1. The **Seller workspace** sets the payment title, exact USDC amount, receiving Algorand address, and description.
+2. The server creates a **7-day HMAC-signed checkout link**. Changing the token invalidates the request.
+3. The **Buyer checkout** displays the seller terms before Pera Wallet opens.
+4. The checkout resolves to a dynamic x402 resource at `/api/x402/pay?request=<signed-token>`.
+5. The resource returns HTTP `402` with an x402 v2 `PAYMENT-REQUIRED` challenge whose amount and recipient match the signed request.
+6. Pera Wallet keeps buyer custody; GoPlausible verifies and settles the AVM payment.
 
-## How To Verify
+## Fast Evaluator Flow
 
-### Hosted challenge
+1. Open https://agentpay-firewall.vercel.app/.
+2. Enter an amount and Algorand Testnet receiving address.
+3. Click **Create payment link**.
+4. Open the generated Buyer checkout.
+5. Confirm the amount, recipient, network, and expiry are visible before wallet connection.
+6. Use the repository smoke command below to verify the hosted `402`, AVM scheme, amount, recipient, ASA, and tamper rejection.
 
 ```bash
 npm install
+npm run smoke:checkout
+```
+
+The original canonical endpoint can also be verified with:
+
+```bash
 npm run smoke:x402
 ```
 
-The smoke test asserts HTTP 402, x402 version 2, exact scheme, Algorand Testnet, ASA `10458941`, amount `1000`, Seller address, and resource binding.
+## Two Independent Evidence Layers
 
-### Product flow
+| Layer | What is proven |
+| --- | --- |
+| Product layer | Seller-created signed link, Buyer checkout, dynamic amount and recipient, expiry, and tamper rejection |
+| Protocol layer | Live HTTP `402`, x402 v2 `exact` AVM challenge, Algorand Testnet, USDC ASA `10458941`, and GoPlausible facilitator |
+| Settlement layer | A funded Pera Buyer completed an official GoPlausible x402 AVM payment on Algorand Testnet |
 
-1. Open the live app.
-2. Click **Verify official 402**.
-3. Connect Pera Wallet on Testnet.
-4. Run the policy check before signing.
-5. Approve the `0.001 USDC` payment.
-6. Inspect the returned transaction in Lora.
-
-### Confirmed paid transaction
+## Confirmed Official Settlement
 
 - Transaction: [`SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ`](https://lora.algokit.io/testnet/transaction/SEQAUK2K5SHHLUA35273OWDNCXXWVODYUUKPZUHQ6JZ2WPQEQWDQ)
 - Confirmed round: `66373009`
 - Buyer: `25QHVX3LLUXIOHW7CRNRDDYMNZMVETYPGJIM66O2R2WZUMACHL2RDLRRBM`
 - Seller: `U3SN2UCQENDGE3CHKPBMXRSNJ2GFCCHLBT7NUC46VSPEGZDMOIQNCHPQJA`
 - Asset and amount: `1000` atomic units of USDC ASA `10458941` (`0.001 USDC`)
-- x402 note: `x402-payment-v2-1786898661884`
-- Fee sponsorship: the GoPlausible fee payer supplied the `0.002 ALGO` group fee while the Buyer transfer used a zero transaction fee.
+- Facilitator: GoPlausible
+- Fee sponsorship: the facilitator supplied the atomic group fee while the Buyer transfer used a zero transaction fee
+
+This receipt proves the official AVM settlement path for the same network, asset, amount, and recipient. The dynamic Seller-link path is separately proven by the hosted checkout smoke and mismatch assertions.
 
 ## Implementation Files
 
-- Algorand seller: [`api/x402/official.ts`](api/x402/official.ts)
-- AVM configuration: [`src/lib/x402-algorand.ts`](src/lib/x402-algorand.ts)
-- Pera buyer: [`src/lib/algorand-wallet.ts`](src/lib/algorand-wallet.ts)
-- Hosted smoke: [`scripts/x402-hosted-smoke.ts`](scripts/x402-hosted-smoke.ts)
-- Automated payer: [`scripts/x402-algorand-pay.ts`](scripts/x402-algorand-pay.ts)
+- Seller link API: [`api/payment-links.ts`](api/payment-links.ts)
+- Dynamic x402 resource: [`api/x402/pay.ts`](api/x402/pay.ts)
+- Signed-token implementation: [`server/payment-link.ts`](server/payment-link.ts)
+- Seller and Buyer UI: [`src/App.tsx`](src/App.tsx)
+- Pera integration: [`src/lib/algorand-wallet.ts`](src/lib/algorand-wallet.ts)
+- Checkout smoke: [`scripts/payment-link-smoke.ts`](scripts/payment-link-smoke.ts)
+- Canonical x402 smoke: [`scripts/x402-hosted-smoke.ts`](scripts/x402-hosted-smoke.ts)
 
-## Accuracy Note
+## Accuracy Boundary
 
-`/api/x402/official` is the required Algorand integration. `/api/paid/*` is only a deterministic policy simulator. `/api/x402/base` preserves the prior EVM route but is not claimed as final-round Algorand evidence.
+`/api/x402/pay` is the dynamic Seller-link product route. `/api/x402/official` remains the canonical fixed-price verification route used for the confirmed settlement. `/api/paid/*` is a deterministic policy simulator, and `/api/x402/base` is portability evidence only.
